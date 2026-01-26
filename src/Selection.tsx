@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { FileText, ShoppingCart, Globe, Plane, Package, Zap, Upload, LogOut, User, X, CreditCard, Building2, Phone, Mail, Sparkles } from 'lucide-react';
+import { FileText, ShoppingCart, Globe, Plane, Package, Zap, Upload, LogOut, User, X, CreditCard, Building2, Phone, Mail, Sparkles, Layout } from 'lucide-react';
 import { api } from './api';
 import { PaymentModal } from './PaymentModal.tsx';
+import { TemplateGallery } from './TemplateGallery.tsx';
+import { XSLTTemplate, xsltTemplates } from './templates';
 
 interface SelectionProps {
     onSelect: (moduleId: string, template: string, moduleName: string, customContent?: string) => void;
@@ -65,6 +67,7 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showGallery, setShowGallery] = useState(false);
     const [userInfo, setUserInfo] = useState<any>(null);
 
     useEffect(() => {
@@ -78,10 +81,14 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             const content = event.target?.result as string;
-            // Pass content and use a dummy template name, or the filename
             onSelect('custom', file.name, 'Özel Belge', content);
         };
         reader.readAsText(file);
+    };
+
+    const handleTemplateSelect = (template: XSLTTemplate) => {
+        onSelect('library', template.fileName, template.name);
+        setShowGallery(false);
     };
 
     return (
@@ -233,144 +240,146 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
 
             <div style={{
                 width: '100%',
-                maxWidth: '900px', // Limit width to keep it centered properly
+                maxWidth: '1000px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center'
             }}>
                 <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
                     <h1 style={{
-                        fontSize: 'clamp(2rem, 5vw, 2.5rem)', // Responsive font size
-                        fontWeight: '800',
+                        fontSize: 'clamp(2.5rem, 6vw, 3.5rem)',
+                        fontWeight: '900',
                         marginBottom: '1rem',
-                        background: 'linear-gradient(to right, #818cf8, #c084fc)',
+                        background: 'linear-gradient(135deg, #fff 0%, #94a3b8 100%)',
                         WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent'
+                        WebkitTextFillColor: 'transparent',
+                        letterSpacing: '-1px'
                     }}>
-                        E-Belge Tasarımcısı
+                        E-Belge Tasarımcı
                     </h1>
-                    <p style={{ color: '#94a3b8', fontSize: '1.1rem' }}>
-                        Kurumsal e-dönüşüm belgelerinizi profesyonel araçlarla tasarlayın.
+                    <p style={{ color: '#94a3b8', fontSize: '1.1rem', maxWidth: '600px' }}>
+                        Türkiyenın en gelişmiş e-belge tasarım platformuna hoş geldiniz.
+                        Hazır şablonlarla başlayın veya kendi tasarımınızı oluşturun.
                     </p>
                 </div>
 
+                {/* Main Action Group */}
                 <div style={{
                     display: 'grid',
-                    // Responsive grid: 1 column on mobile, 2 on tablet, 3 on desktop
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                    gap: '20px',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                    gap: '24px',
                     width: '100%',
-                    justifyContent: 'center',
-                    justifyItems: 'center' // Center items within their grid cells if they are smaller
+                    marginBottom: '4rem'
                 }}>
-                    {modules.map((module) => (
-                        <button
-                            key={module.id}
-                            onClick={() => onSelect(module.id, module.template, module.name)}
-                            style={{
-                                background: 'rgba(30, 41, 59, 0.4)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                borderRadius: '16px',
-                                padding: '20px',
-                                width: '100%', // Take full width of the grid cell
-                                maxWidth: '280px', // But don't grow too large
-                                height: '100px', // Fixed height for uniformity
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '16px',
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                backdropFilter: 'blur(10px)'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.8)';
-                                e.currentTarget.style.borderColor = module.color;
-                                e.currentTarget.style.transform = 'translateY(-4px)';
-                                e.currentTarget.style.boxShadow = `0 10px 20px -5px ${module.color}22`;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.4)';
-                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
-                                e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                        >
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                background: `${module.color}22`,
-                                borderRadius: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: module.color,
-                                flexShrink: 0
-                            }}>
-                                {module.icon}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: 'white', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{module.name}</h3>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#64748b' }}>
-                                    <span>Düzenle</span>
-                                    <span style={{ fontSize: '1rem', lineHeight: 0 }}>&rsaquo;</span>
-                                </div>
-                            </div>
-                        </button>
-                    ))}
-
-                    {/* CUSTOM XSLT OPTION */}
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
+                    <div
+                        onClick={() => setShowGallery(true)}
                         style={{
-                            background: 'rgba(30, 41, 59, 0.4)',
-                            border: '1px dashed rgba(255,255,255,0.2)',
-                            borderRadius: '16px',
-                            padding: '20px',
-                            width: '100%',
-                            maxWidth: '280px',
-                            height: '100px',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '16px',
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                            backdropFilter: 'blur(10px)'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.8)';
-                            e.currentTarget.style.borderColor = '#ffffff';
-                            e.currentTarget.style.transform = 'translateY(-4px)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.4)';
-                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-                            e.currentTarget.style.transform = 'translateY(0)';
+                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                            borderRadius: '24px', padding: '2rem', cursor: 'pointer',
+                            display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            position: 'relative', overflow: 'hidden'
                         }}
                     >
                         <div style={{
-                            width: '48px',
-                            height: '48px',
-                            background: `#ffffff11`,
-                            borderRadius: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'white',
-                            flexShrink: 0
+                            width: '56px', height: '56px', background: '#6366f1', borderRadius: '16px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
                         }}>
-                            <Upload size={24} />
+                            <Layout size={30} />
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: 'white', marginBottom: '2px' }}>Kendin Seç</h3>
-                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                                XSLT Yükle (Bağımsız)
-                            </div>
+                        <div>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Tasarım Kütüphanesi</h2>
+                            <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                                Profesyonellerce hazırlanmış onlarca hazır XSLT şablonu arasından seçin ve saniyeler içinde düzenlemeye başlayın.
+                            </p>
                         </div>
-                    </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                            Kütüphaneyi Keşfet <Sparkles size={16} />
+                        </div>
+                    </div>
+
+                    <div
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                            background: 'rgba(30, 41, 59, 0.4)',
+                            border: '1px dashed rgba(255,255,255,0.1)',
+                            borderRadius: '24px', padding: '2rem', cursor: 'pointer',
+                            display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            backdropFilter: 'blur(10px)'
+                        }}
+                    >
+                        <div style={{
+                            width: '56px', height: '56px', background: 'rgba(255,255,255,0.1)', borderRadius: '16px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
+                        }}>
+                            <Upload size={30} />
+                        </div>
+                        <div>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Kendi Tasarımın</h2>
+                            <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                                Mevcut bir XSLT dosyanız mı var? Dosyanızı yükleyin ve gelişmiş görsel editörümüzle üzerinde değişiklik yapın.
+                            </p>
+                        </div>
+                        <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                            Dosya Seç ve Yükle &rsaquo;
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ width: '100%', marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                        <div style={{ height: '1px', flex: 1, background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.1))' }}></div>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '2px' }}>Hızlı Başlangıç Modülleri</span>
+                        <div style={{ height: '1px', flex: 1, background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.1))' }}></div>
+                    </div>
+
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                        gap: '16px',
+                        width: '100%'
+                    }}>
+                        {modules.map((module) => (
+                            <button
+                                key={module.id}
+                                onClick={() => onSelect(module.id, module.template, module.name)}
+                                style={{
+                                    background: 'rgba(30, 41, 59, 0.2)',
+                                    border: '1px solid rgba(255,255,255,0.05)',
+                                    borderRadius: '16px',
+                                    padding: '16px',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    transition: 'all 0.2s',
+                                    backdropFilter: 'blur(5px)'
+                                }}
+                            >
+                                <div style={{
+                                    width: '36px', height: '36px',
+                                    background: `${module.color}15`,
+                                    borderRadius: '10px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: module.color
+                                }}>
+                                    {module.icon}
+                                </div>
+                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'white' }}>{module.name}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
+
+            <TemplateGallery
+                isOpen={showGallery}
+                onClose={() => setShowGallery(false)}
+                onSelect={handleTemplateSelect}
+            />
 
             <PaymentModal
                 isOpen={showPaymentModal}

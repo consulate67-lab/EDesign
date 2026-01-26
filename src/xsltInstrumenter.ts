@@ -11,8 +11,7 @@ export const selectionScript = `
         transition: outline 0.1s;
       }
       [data-design-id]:hover {
-        outline: 2px dashed #6366f1 !important;
-        background-color: rgba(99, 102, 241, 0.05);
+        /* Removed background and outline to avoid distraction while dragging */
       }
       [data-design-id].selected-element {
         outline: 3px solid #6366f1 !important;
@@ -69,10 +68,24 @@ export const selectionScript = `
                 );
             }
 
+            // Shape Detection logic
+            let shapeType = null;
+            const hasBorder = computed.borderWidth !== '0px' && computed.borderStyle !== 'none';
+            const hasBg = computed.backgroundColor !== 'rgba(0, 0, 0, 0)' && computed.backgroundColor !== 'transparent';
+            const isRound = computed.borderRadius === '50%' || (parseInt(computed.borderRadius) > 0 && target.offsetWidth === target.offsetHeight);
+            const isLine = target.offsetHeight <= 4 || target.offsetWidth <= 4;
+            
+            if ((hasBorder || hasBg) && target.innerText.trim() === '') {
+                if (isRound) shapeType = 'circle';
+                else if (isLine) shapeType = 'line';
+                else shapeType = 'rect';
+            }
+
             window.parent.postMessage({
                 type: 'XSLT_ELEMENT_CLICKED',
                 elementId: target.getAttribute('data-design-id'),
                 elementType: target.tagName.toLowerCase(),
+                shapeType, // NEW
                 path: dynamicPath || target.getAttribute('src') || target.innerText.substring(0, 20) + '...',
                 innerText: target.innerText,
                 tableData,
@@ -88,7 +101,12 @@ export const selectionScript = `
                     width: computed.width,
                     height: computed.height,
                     fontFamily: family,
-                    position: computed.position
+                    position: computed.position,
+                    border: computed.border,
+                    borderRadius: computed.borderRadius,
+                    borderWidth: computed.borderWidth,
+                    borderStyle: computed.borderStyle,
+                    borderColor: computed.borderColor
                 },
                 rect: target.getBoundingClientRect(),
                 isDynamic: target.hasAttribute('data-is-dynamic')

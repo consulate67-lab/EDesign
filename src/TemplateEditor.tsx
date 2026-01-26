@@ -20,8 +20,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ template, docNam
         const loadData = async () => {
             try {
                 const [xsltRes, xmlRes] = await Promise.all([
-                    fetch(`/${template}`),
-                    fetch(`/examples/e-fatura-detail.xml`)
+                    fetch(`./${template}`),
+                    fetch(`./examples/e-fatura-detail.xml`)
                 ]);
                 const xsltText = await xsltRes.text();
                 const xmlText = await xmlRes.text();

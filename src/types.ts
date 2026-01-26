@@ -1,4 +1,4 @@
-export type ElementType = 'text' | 'table' | 'image' | 'formula';
+export type ElementType = 'text' | 'table' | 'image' | 'formula' | 'shape' | 'qrcode';
 
 export interface TableCell {
   content: string;
@@ -22,6 +22,7 @@ export interface DesignElement {
   colWidths?: number[]; // For table elements
   rowHeights?: number[]; // For table elements
   tableData?: TableCell[][]; // For table elements
+  shapeType?: 'rect' | 'circle' | 'line'; // For shape elements
 }
 
 export interface XsltElementOverride {
@@ -38,6 +39,7 @@ export interface XsltElementOverride {
   tableData?: TableCell[][]; // Extracted table structure
   rowCount?: number;
   colCount?: number;
+  shapeType?: 'rect' | 'circle' | 'line'; // NEW: Recognition for shapes in XSLT
 }
 
 export interface DesignState {

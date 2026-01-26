@@ -33,7 +33,7 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
     // Load and Transform
     const refreshLayouts = async (xslt: string) => {
         try {
-            const xmlRes = await fetch(`/examples/e-fatura-detail.xml`);
+            const xmlRes = await fetch(`./examples/e-fatura-detail.xml`);
             const xmlText = await xmlRes.text();
 
             // Backdrop layout (instrumented)
@@ -50,7 +50,7 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
 
     useEffect(() => {
         const init = async () => {
-            const xsltRes = await fetch(`/${template}`);
+            const xsltRes = await fetch(`./${template}`);
             const xsltText = await xsltRes.text();
             setOriginalXslt(xsltText);
             refreshLayouts(xsltText);
@@ -73,7 +73,7 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
     // Update layouts when visual elements change
     useEffect(() => {
         if (originalXslt) {
-            const xmlPromise = fetch(`/examples/e-fatura-detail.xml`).then(r => r.text());
+            const xmlPromise = fetch(`./examples/e-fatura-detail.xml`).then(r => r.text());
             xmlPromise.then(xmlText => {
                 const mergedXslt = mergeDesignWithXslt(originalXslt, state);
                 setFinalPreviewHtml(transformXmlWithXslt(xmlText, mergedXslt));

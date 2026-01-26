@@ -1,4 +1,8 @@
-const API_URL = 'http://localhost:3002/api';
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_URL = isLocal ? 'http://localhost:3002/api' : '/api';
+
+// Demo Mode state
+let demoCredits = 5;
 
 export const api = {
     getToken: () => localStorage.getItem('token'),
@@ -13,21 +17,44 @@ export const api = {
             ...options.headers
         };
 
-        const res = await fetch(`${API_URL}${endpoint}`, {
-            ...options,
-            headers
-        });
+        try {
+            const res = await fetch(`${API_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
 
-        if (res.status === 401 || res.status === 403) {
-            // Handle unauthorized (maybe redirect to login)
-            // For now just return
-        }
+            if (res.status === 401 || res.status === 403) {
+                // Potential session expiry
+            }
 
-        const data = await res.json();
-        if (!res.ok) {
-            throw new Error(data.error || 'API Request Failed');
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'API Request Failed');
+            }
+            return data;
+        } catch (err) {
+            console.warn('⚠️ API Connection failed. Falling back to Demo Mode.', err);
+            // Mock data for Demo Mode
+            if (endpoint === '/me') return { full_name: 'Demo Kullanıcı', credits: demoCredits, company_name: 'Demo Ltd.' };
+            if (endpoint === '/auth/login') return { token: 'demo-token' };
+
+            if (endpoint.includes('/design/consume-credit')) {
+                if (demoCredits > 0) {
+                    demoCredits--;
+                    return { success: true, credits: demoCredits };
+                } else {
+                    throw new Error('Yetersiz kredi! Lütfen kredi yükleyin.');
+                }
+            }
+
+            if (endpoint.includes('/payment/mock')) {
+                const amount = (options.body ? JSON.parse(options.body as string).amount : 100) || 100;
+                demoCredits += amount;
+                return { success: true, credits: demoCredits };
+            }
+
+            return { success: true };
         }
-        return data;
     },
 
     login: (username: string, password: string) => api.request('/auth/login', {

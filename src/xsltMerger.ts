@@ -88,6 +88,14 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         content = `<strong style="${styleToCssForNew(el.style, true)}"><xsl:value-of select="${el.content}"/></strong>`;
       } else if (el.type === 'image') {
         content = `<img src="${el.content}" style="width:100%; height:100%; object-fit:contain; ${styleToCssForNew(el.style, true)}" />`;
+      } else if (el.type === 'shape') {
+        let shapeStyle = '';
+        if (el.shapeType === 'circle') shapeStyle = 'border-radius:50%;';
+        if (el.shapeType === 'line') shapeStyle = 'height:2px; border:none; background-color:black;';
+
+        content = `<div style="width:100%; height:100%; border:1px solid #000; box-sizing:border-box; ${shapeStyle} ${styleToCssForNew(el.style, true)}"></div>`;
+      } else if (el.type === 'qrcode') {
+        content = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&amp;data=${el.content || 'QR-CODE'}" style="width:100%; height:100%; object-fit:contain; ${styleToCssForNew(el.style, true)}" />`;
       } else if (el.type === 'table' && el.tableData) {
         // ... table generation logic ...
         const totalWidth = el.colWidths?.reduce((a, b) => a + b, 0) || 300;
