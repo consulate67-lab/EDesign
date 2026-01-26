@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DndContext, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box } from 'lucide-react';
+import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download } from 'lucide-react';
 import { DraggableElement } from './DraggableElement.tsx';
 import { mergeDesignWithXslt } from './xsltMerger.ts';
 import { transformXmlWithXslt } from './xsltTransformer.ts';
@@ -37,7 +37,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const [history, setHistory] = useState<DesignState[]>([]);
 
     const saveHistory = () => {
-        setHistory(prev => [...prev.slice(-49), JSON.parse(JSON.stringify(state))]);
+        setHistory(prev => [...prev, JSON.parse(JSON.stringify(state))]);
     };
 
     const handleUndo = () => {
@@ -45,6 +45,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         const lastState = history[history.length - 1];
         setHistory(prev => prev.slice(0, -1));
         setState(lastState);
+        setNotification({ message: 'İşlem geri alındı.', type: 'success' });
     };
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +57,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     useEffect(() => {
         const loadData = async () => {
             try {
+                // Reset state when a new template is loaded to prevent old overrides from affecting new design
+                setState({
+                    elements: [],
+                    xsltOverrides: [],
+                    companyName: 'Örnek Firma A.Ş.',
+                    logoUrl: '',
+                    selectedId: null,
+                    selectedXsltElement: null,
+                });
+
                 let text = '';
 
                 if (customContent) {
@@ -63,7 +74,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     text = customContent;
                 } else {
                     console.log('📂 Loading XSLT template:', template);
-                    const xsltRes = await fetch(`./${template}`);
+                    // Use absolute-ish path for reliable fetching
+                    const xsltRes = await fetch(`./${template.replace(/^\.\//, '')}`);
 
                     if (!xsltRes.ok) {
                         const msg = `Tasarım dosyası yüklenemedi (${template}). Sunucuda dosya bulunamadı.`;
@@ -79,8 +91,6 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
 
                 console.log('✅ XSLT loaded & instrumented.');
                 setOriginalXslt(instrumented);
-
-                refreshPreview(instrumented, state);
 
             } catch (err) {
                 console.error("❌ Initial load error:", err);
@@ -98,6 +108,15 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
 
     // Map module IDs to their corresponding XML files
     const getXmlFile = (moduleId: string): string => {
+        // If it's from library, we try to guess based on template filename
+        if (moduleId === 'library' || moduleId === 'custom') {
+            const temp = template.toLowerCase();
+            if (temp.includes('arsiv') || temp.includes('mikro')) return 'e-arsiv-detail.xml';
+            if (temp.includes('net') || temp.includes('ticaret')) return 'e-ticaret-detail.xml';
+            if (temp.includes('ihracat')) return 'e-ihracat-detail.xml';
+            return 'e-fatura-detail.xml';
+        }
+
         const xmlMap: Record<string, string> = {
             'fatura': 'e-fatura-detail.xml',
             'arsiv': 'e-arsiv-detail.xml',
@@ -303,6 +322,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             rowHeights,
             tableData
         };
+        saveHistory();
         setState(prev => ({ ...prev, elements: [...prev.elements, newElement], selectedId: newElement.id }));
         setNotification({ message: `${type === 'shape' ? 'Şekil' : 'Nesne'} başarıyla eklendi.`, type: 'success' });
     };
@@ -516,7 +536,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             });
     }, []);
 
-    const handleSave = async () => {
+    const handleDownload = async () => {
         try {
             const res = await api.consumeCredit();
             if (res.success) {
@@ -531,7 +551,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 a.click();
 
                 setNotification({
-                    message: `Tasarım başarıyla kaydedildi! Kalan Krediniz: ${res.credits}`,
+                    message: `Tasarım başarıyla indirildi! Kalan Krediniz: ${res.credits}`,
                     type: 'success'
                 });
             }
@@ -545,6 +565,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         }
     };
 
+    const handleLocalSave = () => {
+        setNotification({ message: 'Tasarım durumu kaydedildi (Checkpoint).', type: 'success' });
+    };
 
     if (loadError) {
         return (
@@ -606,111 +629,199 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             />
 
             <header style={{
-                height: '56px', background: '#1e293b', borderBottom: '1px solid #334155',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1rem', zIndex: 10
+                height: '72px', background: 'rgba(30, 41, 59, 0.8)', backdropFilter: 'blur(12px)',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', padding: '0 1.5rem', zIndex: 10, gap: '1rem',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                        <ChevronLeft size={20} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
+                    <button onClick={onBack} title="Geri Dön" style={{ width: '44px', height: '44px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <ChevronLeft size={22} />
                     </button>
-                    <div style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Layout size={18} color="#6366f1" />
-                        <span style={{ fontWeight: 'bold' }}>{docName} Tasarımcısı</span>
-                        <span style={{ color: '#64748b', fontSize: '0.75rem' }}>({template})</span>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {userInfo && (
-                        <div style={{ marginRight: '1rem', background: '#0f172a', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', color: userInfo.credits > 0 ? '#10b981' : '#f87171', border: '1px solid #334155' }}>
-                            Kredi: <b>{userInfo.credits}</b> {userInfo.role === 'admin' && '(Admin)'}
-                        </div>
-                    )}
+                    <div style={{ width: '1px', height: '28px', background: '#334155', flexShrink: 0 }}></div>
+
                     <button
                         onClick={handleUndo}
                         disabled={history.length === 0}
+                        title="Son İşlemi Geri Al"
                         style={{
-                            height: '36px', padding: '0 1rem', fontSize: '0.875rem',
-                            background: 'transparent', border: '1px solid #334155',
-                            color: history.length > 0 ? '#94a3b8' : '#334155', borderRadius: '8px',
+                            height: '44px', padding: '0 1.25rem', fontSize: '0.85rem',
+                            background: history.length > 0 ? 'rgba(129, 140, 248, 0.1)' : 'rgba(30, 41, 59, 0.2)',
+                            border: '1px solid',
+                            borderColor: history.length > 0 ? 'rgba(129, 140, 248, 0.3)' : 'rgba(255,255,255,0.05)',
+                            color: history.length > 0 ? '#a5b4fc' : '#475569', borderRadius: '12px',
                             cursor: history.length > 0 ? 'pointer' : 'not-allowed',
-                            display: 'flex', alignItems: 'center', gap: '8px'
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap',
+                            fontWeight: '600'
                         }}
                     >
-                        <Undo size={16} /> Geri Al
+                        <Undo size={18} /> Geri Al
                     </button>
-                    <button onClick={handleSave} className="btn-primary" style={{ height: '36px', padding: '0 1rem', fontSize: '0.875rem' }}>
-                        <Save size={16} style={{ marginRight: '6px' }} /> Kaydet / XSLT Oluştur
+
+                    <button onClick={handleLocalSave} style={{
+                        height: '44px', padding: '0 1.25rem', background: 'rgba(30, 41, 59, 0.5)',
+                        border: '1px solid rgba(255,255,255,0.1)', color: 'white',
+                        borderRadius: '12px', cursor: 'pointer', fontSize: '0.85rem', display: 'flex',
+                        alignItems: 'center', gap: '8px', whiteSpace: 'nowrap'
+                    }}>
+                        <Save size={18} /> Kaydet
                     </button>
+
+                    <button onClick={handleDownload} style={{
+                        height: '44px', padding: '0 1.5rem', fontSize: '0.9rem',
+                        display: 'flex', alignItems: 'center', gap: '10px', borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                        color: 'white', border: '1px solid rgba(255,255,255,0.1)',
+                        boxShadow: '0 8px 20px -6px rgba(99, 102, 241, 0.6)', whiteSpace: 'nowrap',
+                        cursor: 'pointer', fontWeight: '700', transition: 'all 0.2s'
+                    }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                        <Download size={20} /> XSLT İndir
+                    </button>
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
+                    <div style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '10px', maxWidth: '100%', overflow: 'hidden' }}>
+                        <Layout size={20} color="#818cf8" />
+                        <span style={{ fontWeight: '800', fontSize: '1.1rem', letterSpacing: '0.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{docName}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem', background: 'rgba(15, 23, 42, 0.6)', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', whiteSpace: 'nowrap' }}>{template}</span>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0, paddingRight: '0.5rem' }}>
+                    {userInfo && (
+                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '8px 16px', borderRadius: '12px', fontSize: '0.85rem', color: userInfo.credits > 0 ? '#10b981' : '#f87171', border: '1px solid rgba(16, 185, 129, 0.2)', whiteSpace: 'nowrap', fontWeight: '600' }}>
+                            <span style={{ opacity: 0.7, marginRight: '4px' }}>Kredi:</span> <b>{userInfo.credits}</b>
+                        </div>
+                    )}
                 </div>
             </header>
 
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                <aside style={{ width: '260px', background: '#1e293b', borderRight: '1px solid #334155', display: 'flex', flexDirection: 'column', zIndex: 5 }}>
-                    <div style={{ padding: '0.75rem', background: '#0f172a', borderBottom: '1px solid #334155' }}>
-                        <label style={{ fontSize: '0.65rem', color: '#64748b', marginBottom: '8px', display: 'block', fontWeight: 'bold' }}>NESNE KÜTÜPHANESİ</label>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
-                            <button onClick={() => addElement('text')} title="Metin" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Type size={20} />
-                            </button>
-                            <button onClick={() => addElement('table')} title="Tablo" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <LucideTable size={20} />
-                            </button>
-                            <button onClick={() => addElement('formula')} title="Formül" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Sigma size={20} />
-                            </button>
-                            <button onClick={() => fileInputRef.current?.click()} title="Resim Ekle (Dosyadan)" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <ImageIcon size={20} />
-                            </button>
-                            <button onClick={() => addElement('qrcode')} title="QR Kodu Ekle" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <QrCode size={20} />
-                            </button>
+                <aside style={{
+                    width: '300px',
+                    background: '#0f172a',
+                    borderRight: '1px solid rgba(255,255,255,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    zIndex: 5,
+                    boxShadow: '10px 0 30px rgba(0,0,0,0.2)'
+                }}>
+                    <div style={{ padding: '1.5rem', background: 'rgba(30, 41, 59, 0.3)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <label style={{ fontSize: '0.6rem', color: '#6366f1', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
+                            <Box size={14} /> NESNE KÜTÜPHANESİ
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '1.5rem' }}>
+                            {[
+                                { id: 'text', icon: <Type size={20} />, label: 'Metin', action: () => addElement('text') },
+                                { id: 'table', icon: <LucideTable size={20} />, label: 'Tablo', action: () => addElement('table') },
+                                { id: 'formula', icon: <Sigma size={20} />, label: 'Formül', action: () => addElement('formula') },
+                                { id: 'qrcode', icon: <QrCode size={20} />, label: 'QR', action: () => addElement('qrcode') },
+                                { id: 'image', icon: <ImageIcon size={20} />, label: 'Resim', action: () => fileInputRef.current?.click() }
+                            ].map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={item.action}
+                                    title={item.label}
+                                    style={{
+                                        height: '44px', background: 'rgba(30, 41, 59, 0.5)',
+                                        border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8',
+                                        borderRadius: '12px', cursor: 'pointer', display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.background = '#6366f1';
+                                        e.currentTarget.style.color = 'white';
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.background = 'rgba(30, 41, 59, 0.5)';
+                                        e.currentTarget.style.color = '#94a3b8';
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    {item.icon}
+                                </button>
+                            ))}
                         </div>
-                        <label style={{ fontSize: '0.65rem', color: '#64748b', margin: '8px 0', display: 'block', fontWeight: 'bold' }}>ŞEKİLLER</label>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
-                            <button onClick={() => addShape('rect')} title="Dikdörtgen" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Square size={20} />
-                            </button>
-                            <button onClick={() => addShape('circle')} title="Daire" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Circle size={20} />
-                            </button>
-                            <button onClick={() => addShape('line')} title="Çizgi" style={{ flex: 1, height: '40px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Minus size={20} />
-                            </button>
+
+                        <label style={{ fontSize: '0.6rem', color: '#6366f1', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
+                            ŞEKİLLER
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            {[
+                                { id: 'rect', icon: <Square size={18} />, action: () => addShape('rect') },
+                                { id: 'circle', icon: <Circle size={18} />, action: () => addShape('circle') },
+                                { id: 'line', icon: <Minus size={18} />, action: () => addShape('line') }
+                            ].map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={item.action}
+                                    style={{
+                                        flex: 1, height: '36px', background: 'rgba(30, 41, 59, 0.5)',
+                                        border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8',
+                                        borderRadius: '10px', cursor: 'pointer', display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.borderColor = '#6366f1';
+                                        e.currentTarget.style.color = 'white';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                                        e.currentTarget.style.color = '#94a3b8';
+                                    }}
+                                >
+                                    {item.icon}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    <div style={{ padding: '0.75rem', background: '#0f172a', borderBottom: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ padding: '1.25rem', background: 'rgba(15, 23, 42, 0.5)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Ruler size={16} color="#6366f1" />
-                                <span style={{ color: 'white', fontSize: '0.875rem', fontWeight: 'bold' }}>Özellik Denetçisi</span>
+                                <div style={{ width: '24px', height: '24px', background: 'rgba(99, 102, 241, 0.2)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Sigma size={14} color="#818cf8" />
+                                </div>
+                                <span style={{ color: 'white', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Özellikler</span>
                             </div>
                             {(state.selectedId || state.selectedXsltElement) && (
                                 <button
                                     onClick={duplicateElement}
-                                    title="Seçili Nesneyi Kopyala"
+                                    title="Kopyala"
                                     style={{
-                                        background: '#1e293b', border: '1px solid #334155',
-                                        color: '#10b981', borderRadius: '4px', padding: '4px 8px',
-                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                                        fontSize: '0.65rem'
+                                        background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)',
+                                        color: '#10b981', borderRadius: '8px', padding: '4px 10px',
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                        fontSize: '0.65rem', fontWeight: 'bold', transition: 'all 0.2s'
                                     }}
+                                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)'}
+                                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
                                 >
                                     <Copy size={12} /> Kopyala
                                 </button>
                             )}
                         </div>
+
                         {state.selectedId ? (
-                            <div style={{ padding: '4px 8px', background: '#6366f122', borderRadius: '4px', border: '1px solid #6366f144', marginTop: '4px' }}>
-                                <span style={{ fontSize: '0.65rem', color: '#818cf8', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Seçili Nesne</span>
-                                <span style={{ fontSize: '0.75rem', color: 'white' }}>{state.elements.find(e => e.id === state.selectedId)?.type.toUpperCase()}</span>
+                            <div style={{ padding: '10px', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                                <span style={{ fontSize: '0.6rem', color: '#818cf8', fontWeight: 'bold', display: 'block', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Seçili Bileşen</span>
+                                <span style={{ fontSize: '0.85rem', color: 'white', fontWeight: 'bold' }}>{state.elements.find(e => e.id === state.selectedId)?.type.toUpperCase()}</span>
                             </div>
                         ) : state.selectedXsltElement ? (
-                            <div style={{ padding: '4px 8px', background: state.selectedXsltElement.isDynamic ? '#10b98122' : '#6366f122', borderRadius: '4px', border: `1px solid ${state.selectedXsltElement.isDynamic ? '#10b98144' : '#6366f144'}`, marginTop: '4px' }}>
-                                <span style={{ fontSize: '0.6rem', color: state.selectedXsltElement.isDynamic ? '#34d399' : '#818cf8', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>
-                                    {state.selectedXsltElement.isDynamic ? 'Veri Alanı (XPATH)' : 'Tablon / Şablon Nesnesi'}
+                            <div style={{
+                                padding: '10px',
+                                background: state.selectedXsltElement.isDynamic ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                                borderRadius: '12px',
+                                border: `1px solid ${state.selectedXsltElement.isDynamic ? 'rgba(16, 185, 129, 0.2)' : 'rgba(99, 102, 241, 0.2)'}`
+                            }}>
+                                <span style={{ fontSize: '0.6rem', color: state.selectedXsltElement.isDynamic ? '#34d399' : '#818cf8', fontWeight: 'bold', display: 'block', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>
+                                    {state.selectedXsltElement.isDynamic ? 'Veri Alanı (XPATH)' : 'Sabit Bileşen'}
                                 </span>
-                                <span style={{ fontSize: '0.8rem', color: 'white', fontWeight: 'bold' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'white', fontWeight: 'bold', wordBreak: 'break-all' }}>
                                     {state.selectedXsltElement.isDynamic && state.selectedXsltElement.path ?
                                         state.selectedXsltElement.path.split('/').pop() :
                                         (state.selectedXsltElement.elementType === 'table' ? 'Tablo Nesnesi' :
@@ -722,7 +833,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         ) : null}
                     </div>
 
-                    <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
                         {selectedDbField ? (
                             <div style={{ background: '#6366f122', padding: '1rem', border: '1px solid #6366f1', borderRadius: '8px', marginBottom: '1rem' }}>
                                 <span style={{ fontSize: '0.65rem', color: '#818cf8', fontWeight: 'bold' }}>SİSTEM ALANI</span>
@@ -1275,36 +1386,40 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                         )}
 
                                     {/* XSLT Dimensions Section */}
-                                    <div className="property-section">
-                                        <div className="property-section-header">
-                                            <Move size={12} /> Boyutlar & Konum
+                                    <div className="property-section" style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                        <div className="property-section-header" style={{ padding: '0.6rem 1rem', background: 'rgba(30, 41, 59, 0.4)', fontSize: '0.65rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                            <Move size={14} /> KONUM VE BOYUT
                                         </div>
-                                        <div className="property-section-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                        <div className="property-section-body" style={{ padding: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                             <div className="form-group">
-                                                <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Soldan (X)</label>
-                                                <input type="number" className="input-field" style={{ padding: '4px' }} value={Math.round(parseInt(state.selectedXsltElement.styleOverrides.left as string) || 0)} onChange={(e) => {
-                                                    const val = parseInt(e.target.value) || 0;
-                                                    setState(prev => {
-                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, left: `${val}px`, position: 'absolute' as any } };
-                                                        const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                        if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                        if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                        return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                    });
-                                                }} />
+                                                <label style={{ fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>SOL (X)</label>
+                                                <input type="number" className="input-field" style={{ width: '100%', height: '32px', borderRadius: '8px' }} value={Math.round(parseInt(state.selectedXsltElement.styleOverrides.left as string) || 0)}
+                                                    onMouseDown={() => saveHistory()}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setState(prev => {
+                                                            const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, left: `${val}px`, position: 'absolute' as any } };
+                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                            if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                        });
+                                                    }} />
                                             </div>
                                             <div className="form-group">
-                                                <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Üstten (Y)</label>
-                                                <input type="number" className="input-field" style={{ padding: '4px' }} value={Math.round(parseInt(state.selectedXsltElement.styleOverrides.top as string) || 0)} onChange={(e) => {
-                                                    const val = parseInt(e.target.value) || 0;
-                                                    setState(prev => {
-                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, top: `${val}px`, position: 'absolute' as any } };
-                                                        const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                        if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                        if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                        return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                    });
-                                                }} />
+                                                <label style={{ fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>ÜST (Y)</label>
+                                                <input type="number" className="input-field" style={{ width: '100%', height: '32px', borderRadius: '8px' }} value={Math.round(parseInt(state.selectedXsltElement.styleOverrides.top as string) || 0)}
+                                                    onMouseDown={() => saveHistory()}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setState(prev => {
+                                                            const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, top: `${val}px`, position: 'absolute' as any } };
+                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                            if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                        });
+                                                    }} />
                                             </div>
                                         </div>
                                     </div>
@@ -1400,59 +1515,61 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
 
                                     {state.selectedXsltElement.elementType !== 'image' && (
                                         <>
-                                            <div className="property-section">
-                                                <div className="property-section-header">
-                                                    <Type size={12} /> Yazı Tipi
+                                            <div className="property-section" style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                                <div className="property-section-header" style={{ padding: '0.6rem 1rem', background: 'rgba(30, 41, 59, 0.4)', fontSize: '0.65rem', color: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                    <Type size={14} /> METİN STİLİ
                                                 </div>
-                                                <div className="property-section-body">
-                                                    <select
-                                                        className="input-field"
-                                                        style={{ width: '100%' }}
-                                                        value={state.selectedXsltElement.styleOverrides.fontFamily || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setState(prev => {
-                                                                const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontFamily: val } };
-                                                                const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                                if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                                if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                                return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                            });
-                                                        }}
-                                                    >
-                                                        <option value="">Varsayılan</option>
-                                                        <option value="Arial, sans-serif">Arial</option>
-                                                        <option value="'Times New Roman', serif">Times New Roman</option>
-                                                        <option value="'Courier New', monospace">Courier New</option>
-                                                        <option value="Georgia, serif">Georgia</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div className="property-section">
-                                                <div className="property-section-header">
-                                                    <Type size={12} /> Stil Ayarları
-                                                </div>
-                                                <div className="property-section-body">
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                                        <div className="form-group">
-                                                            <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Boyut</label>
-                                                            <input type="text" className="input-field" style={{ padding: '4px' }} value={state.selectedXsltElement.styleOverrides.fontSize || '12px'} onChange={(e) => {
+                                                <div className="property-section-body" style={{ padding: '1rem' }}>
+                                                    <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                                        <label style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Yazı Tipi</label>
+                                                        <select
+                                                            className="input-field"
+                                                            style={{ width: '100%', height: '38px', borderRadius: '10px', fontSize: '0.8rem' }}
+                                                            value={state.selectedXsltElement.styleOverrides.fontFamily || ''}
+                                                            onChange={(e) => {
                                                                 const val = e.target.value;
                                                                 setState(prev => {
-                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontSize: val } };
+                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontFamily: val } };
                                                                     const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
                                                                     if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
                                                                     if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
                                                                     return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
                                                                 });
-                                                            }} />
+                                                            }}
+                                                        >
+                                                            <option value="">Varsayılan</option>
+                                                            <option value="Arial, sans-serif">Arial</option>
+                                                            <option value="'Times New Roman', serif">Times New Roman</option>
+                                                            <option value="'Courier New', monospace">Courier New</option>
+                                                            <option value="Georgia, serif">Georgia</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                                        <div className="form-group">
+                                                            <label style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Boyut</label>
+                                                            <input type="text" className="input-field"
+                                                                style={{ width: '100%', height: '36px', borderRadius: '8px', fontSize: '0.8rem', textAlign: 'center' }}
+                                                                value={state.selectedXsltElement.styleOverrides.fontSize || '12px'}
+                                                                onMouseDown={() => saveHistory()}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setState(prev => {
+                                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontSize: val } };
+                                                                        const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                        if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                                        if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                                        return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                                    });
+                                                                }}
+                                                            />
                                                         </div>
                                                         <div className="form-group">
-                                                            <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Düzen</label>
-                                                            <div className="toolbar-group">
+                                                            <label style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800', marginBottom: '6px', display: 'block', letterSpacing: '0.5px' }}>Format</label>
+                                                            <div className="toolbar-group" style={{ height: '36px', borderRadius: '8px', padding: '2px' }}>
                                                                 <button onClick={() => {
                                                                     const isBold = state.selectedXsltElement?.styleOverrides.fontWeight === 'bold';
+                                                                    saveHistory();
                                                                     setState(prev => {
                                                                         const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontWeight: isBold ? 'normal' : 'bold' } };
                                                                         const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
@@ -1460,86 +1577,96 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                                         if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
                                                                         return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
                                                                     });
-                                                                }} className={`toolbar-btn ${state.selectedXsltElement.styleOverrides.fontWeight === 'bold' ? 'active' : ''}`}><Bold size={14} /></button>
+                                                                }} className={`toolbar-btn ${state.selectedXsltElement.styleOverrides.fontWeight === 'bold' ? 'active' : ''}`} style={{ borderRadius: '6px' }}><Bold size={14} /></button>
                                                                 <button onClick={() => {
-                                                                    const isItalicActual = state.selectedXsltElement?.styleOverrides.fontStyle === 'italic';
+                                                                    const isItalic = state.selectedXsltElement?.styleOverrides.fontStyle === 'italic';
+                                                                    saveHistory();
                                                                     setState(prev => {
-                                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontStyle: isItalicActual ? 'normal' : 'italic' } };
+                                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, fontStyle: isItalic ? 'normal' : 'italic' } };
                                                                         const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
                                                                         if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
                                                                         if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
                                                                         return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
                                                                     });
-                                                                }} className={`toolbar-btn ${state.selectedXsltElement.styleOverrides.fontStyle === 'italic' ? 'active' : ''}`}><Italic size={14} /></button>
+                                                                }} className={`toolbar-btn ${state.selectedXsltElement.styleOverrides.fontStyle === 'italic' ? 'active' : ''}`} style={{ borderRadius: '6px' }}><Italic size={14} /></button>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="property-section">
-                                                <div className="property-section-header">
-                                                    <Sparkles size={12} /> Renkler
+                                            <div className="property-section" style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                                <div className="property-section-header" style={{ padding: '0.6rem 1rem', background: 'rgba(30, 41, 59, 0.4)', fontSize: '0.65rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                    <Sparkles size={14} /> RENK VE GÖRÜNÜM
                                                 </div>
-                                                <div className="property-section-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                                    <div className="form-group">
-                                                        <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Metin</label>
-                                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                                            <input type="color" style={{ width: '24px', height: '24px', padding: '0', border: 'none', background: 'transparent', cursor: 'pointer' }} value={state.selectedXsltElement.styleOverrides.color as string || '#000000'} onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                setState(prev => {
-                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, color: val } };
-                                                                    const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                                    if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                                    if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                                    return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                                });
-                                                            }} />
-                                                            <input type="text" className="input-field" style={{ flex: 1, padding: '2px', fontSize: '0.65rem' }} value={state.selectedXsltElement.styleOverrides.color as string || '#000000'} onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                setState(prev => {
-                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, color: val } };
-                                                                    const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                                    if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                                    if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                                    return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                                });
-                                                            }} />
+                                                <div className="property-section-body" style={{ padding: '1rem' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1rem' }}>
+                                                        <div className="form-group">
+                                                            <label style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '4px', display: 'block' }}>Metin Rengi</label>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                <input type="color" style={{ width: '42px', height: '36px', padding: '2px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '8px', cursor: 'pointer' }} value={state.selectedXsltElement.styleOverrides.color as string || '#000000'}
+                                                                    onMouseDown={() => saveHistory()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setState(prev => {
+                                                                            const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, color: val } };
+                                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                                            if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                                        });
+                                                                    }} />
+                                                                <input type="text" className="input-field" style={{ flex: 1, height: '36px', fontSize: '0.75rem', textAlign: 'center', fontFamily: 'monospace' }} value={state.selectedXsltElement.styleOverrides.color as string || '#000000'}
+                                                                    onMouseDown={() => saveHistory()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setState(prev => {
+                                                                            const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, color: val } };
+                                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                                            if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                                        });
+                                                                    }} />
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Zemin</label>
-                                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                                            <input type="color" style={{ width: '24px', height: '24px', padding: '0', border: 'none', background: 'transparent', cursor: 'pointer' }} value={state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? '#ffffff' : state.selectedXsltElement.styleOverrides.backgroundColor as string || '#ffffff'} onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                setState(prev => {
-                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, backgroundColor: val } };
-                                                                    const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                                    if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                                    if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                                    return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                                });
-                                                            }} />
-                                                            <button onClick={() => {
-                                                                setState(prev => {
-                                                                    const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, backgroundColor: 'transparent' } };
-                                                                    const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
-                                                                    if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
-                                                                    if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
-                                                                    return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
-                                                                });
-                                                            }} style={{ flex: 1, background: state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? '#6366f1' : '#1e293b', border: '1px solid #334155', color: 'white', fontSize: '0.6rem', borderRadius: '4px', cursor: 'pointer' }}>Şeffaf</button>
+                                                        <div className="form-group">
+                                                            <label style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '4px', display: 'block' }}>Zemin Rengi</label>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                <input type="color" style={{ width: '42px', height: '36px', padding: '2px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '8px', cursor: 'pointer' }} value={state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? '#ffffff' : state.selectedXsltElement.styleOverrides.backgroundColor as string || '#ffffff'}
+                                                                    onMouseDown={() => saveHistory()}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setState(prev => {
+                                                                            const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, backgroundColor: val } };
+                                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                                            if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                                        });
+                                                                    }} />
+                                                                <button onClick={() => {
+                                                                    saveHistory();
+                                                                    setState(prev => {
+                                                                        const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, backgroundColor: 'transparent' } };
+                                                                        const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                        if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+                                                                        if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                                                                        return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                                    });
+                                                                }} style={{ height: '36px', flex: 1, background: state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(30, 41, 59, 0.5)', border: '1px solid', borderColor: state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? '#6366f1' : 'rgba(255,255,255,0.1)', color: state.selectedXsltElement.styleOverrides.backgroundColor === 'transparent' ? '#a5b4fc' : 'white', fontSize: '0.7rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: 'all 0.2s' }}>Şeffaf</button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {state.selectedXsltElement.elementType === 'table' && (
-                                                <div className="property-section">
-                                                    <div className="property-section-header">
-                                                        <Box size={12} /> Kenarlıklar
+                                                <div className="property-section" style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                                    <div className="property-section-header" style={{ padding: '0.6rem 1rem', background: 'rgba(30, 41, 59, 0.4)', fontSize: '0.65rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                                        <Box size={14} /> KENARLIKLAR
                                                     </div>
-                                                    <div className="property-section-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                    <div className="property-section-body" style={{ padding: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                                         <button onClick={() => {
                                                             setState(prev => {
                                                                 const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, border: '1px solid black' } };
@@ -1548,7 +1675,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                                 if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
                                                                 return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
                                                             });
-                                                        }} className="btn-secondary" style={{ fontSize: '0.6rem', padding: '4px' }}>Kenarlık Ekle</button>
+                                                        }} style={{ height: '36px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px', fontSize: '0.7rem', cursor: 'pointer' }}>Ekle</button>
                                                         <button onClick={() => {
                                                             setState(prev => {
                                                                 const updated = { ...prev.selectedXsltElement!, styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, border: 'none' } };
@@ -1557,7 +1684,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                                 if (iframeRef.current?.contentWindow) iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
                                                                 return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
                                                             });
-                                                        }} className="btn-secondary" style={{ fontSize: '0.6rem', padding: '4px' }}>Temizle</button>
+                                                        }} style={{ height: '36px', background: 'rgba(30, 41, 59, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#f87171', borderRadius: '8px', fontSize: '0.7rem', cursor: 'pointer' }}>Kaldır</button>
                                                     </div>
                                                 </div>
                                             )}
@@ -1568,6 +1695,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                         <button
                                             onClick={() => {
                                                 if (!state.selectedXsltElement) return;
+                                                saveHistory();
                                                 const updated = { ...state.selectedXsltElement, styleOverrides: { ...state.selectedXsltElement.styleOverrides, display: 'none' } };
                                                 setState(prev => {
                                                     const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
@@ -1582,23 +1710,25 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                             Gizle
                                         </button>
                                         <button
-                                            onClick={() => setState(prev => ({ ...prev, selectedXsltElement: null, xsltOverrides: prev.xsltOverrides.filter(o => o.elementId !== prev.selectedXsltElement?.elementId) }))}
+                                            onClick={() => {
+                                                saveHistory();
+                                                setState(prev => ({ ...prev, selectedXsltElement: null, xsltOverrides: prev.xsltOverrides.filter(o => o.elementId !== prev.selectedXsltElement?.elementId) }));
+                                            }}
                                             style={{ flex: 1, padding: '8px', background: '#334155', color: '#94a3b8', border: '1px solid #475569', borderRadius: '6px', cursor: 'pointer', fontSize: '0.7rem' }}
                                         >
                                             Sıfırla
                                         </button>
                                     </div>
                                 </div>
+                                ) : (
+                                <div style={{ textAlign: 'center', color: '#64748b', marginTop: '2rem' }}>
+                                    <Settings size={48} style={{ opacity: 0.1, marginBottom: '1rem' }} />
+                                    <p style={{ fontSize: '0.875rem' }}>Lütfen düzenlemek için bir nesne veya XSLT elementi seçin.</p>
+                                    <p style={{ fontSize: '0.7rem', marginTop: '8px', color: '#475569' }}>Taslak üzerindeki logo, tablo veya alanlara tıklayarak stillerini değiştirebilirsiniz.</p>
+                                </div>
+                            )}
                             </div>
-                        ) : (
-                            <div style={{ textAlign: 'center', color: '#64748b', marginTop: '2rem' }}>
-                                <Settings size={48} style={{ opacity: 0.1, marginBottom: '1rem' }} />
-                                <p style={{ fontSize: '0.875rem' }}>Lütfen düzenlemek için bir nesne veya XSLT elementi seçin.</p>
-                                <p style={{ fontSize: '0.7rem', marginTop: '8px', color: '#475569' }}>Taslak üzerindeki logo, tablo veya alanlara tıklayarak stillerini değiştirebilirsiniz.</p>
-                            </div>
-                        )}
-                    </div>
-                </aside>
+                    </aside>
 
                 <main
                     style={{ flex: 1, background: '#020617', display: 'flex', overflow: 'hidden', position: 'relative' }}

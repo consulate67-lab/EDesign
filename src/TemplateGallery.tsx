@@ -65,8 +65,16 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                 </div>
 
                 {/* Filters & Search */}
-                <div style={{ padding: '1rem 2rem', background: 'rgba(15, 23, 42, 0.2)', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
+                <div style={{
+                    padding: '1rem 2rem',
+                    background: 'rgba(15, 23, 42, 0.2)',
+                    display: 'flex',
+                    gap: '1.5rem',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    justifyContent: 'space-between'
+                }}>
+                    <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
                         <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                             type="text"
@@ -79,7 +87,14 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                             }}
                         />
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        overflowX: 'auto',
+                        padding: '4px 0',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none'
+                    }}>
                         {categories.map(cat => (
                             <button
                                 key={cat}
@@ -90,7 +105,9 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                                     color: activeCategory === cat ? 'white' : '#94a3b8',
                                     border: '1px solid',
                                     borderColor: activeCategory === cat ? '#6366f1' : 'rgba(255,255,255,0.05)',
-                                    cursor: 'pointer', transition: 'all 0.2s'
+                                    cursor: 'pointer', transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0
                                 }}
                             >
                                 {cat}
