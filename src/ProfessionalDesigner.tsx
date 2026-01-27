@@ -95,17 +95,31 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     console.log('📂 Loading Custom XSLT content...');
                     text = customContent;
                 } else {
-                    console.log('📂 Loading XSLT template:', template);
-                    // Use absolute-ish path for reliable fetching
-                    const xsltRes = await fetch(`./${template.replace(/^\.\//, '')}`);
+                    // Fix file path construction
+                    // If template is just a filename like "Antrepo_Fatura.xslt", and it is in public/,
+                    // In production (base: /EDesign/), it should be fetched from ./Antrepo_Fatura.xslt relative to index, or absolute /EDesign/Antrepo_Fatura.xslt
+
+                    // Remove any leading ./ or / to sanitize
+                    const cleanName = template.replace(/^(\.\/|\/)/, '');
+                    const fetchUrl = cleanName; // Relative fetch is usually safest in Vite
+
+                    console.log('📂 Loading XSLT template from:', fetchUrl);
+
+                    const xsltRes = await fetch(fetchUrl);
 
                     if (!xsltRes.ok) {
-                        const msg = `Tasarım dosyası yüklenemedi (${template}). Sunucuda dosya bulunamadı.`;
+                        const msg = `Tasarım dosyası yüklenemedi (${fetchUrl}). Hata: ${xsltRes.status} ${xsltRes.statusText}`;
                         console.error('❌ XSLT fetch failed:', xsltRes.status, xsltRes.statusText);
                         setLoadError(msg);
                         return;
                     }
+
                     text = await xsltRes.text();
+
+                    // Verify it is somewhat valid XSLT and not HTML (Vite fallback)
+                    if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
+                        throw new Error(`XSLT dosyası bulunamadı (HTML döndü): ${fetchUrl}`);
+                    }
                 }
 
                 // Instrument ONCE
@@ -211,6 +225,11 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     return;
                 }
                 xmlText = await xmlRes.text();
+                if (xmlText.trim().startsWith('<!DOCTYPE html') || xmlText.trim().startsWith('<html')) {
+                    console.error('❌ XML file invalid (HTML returned):', xmlFile);
+                    // Fallback to empty XML to prevent crash, or notify
+                    return;
+                }
                 xmlCache.current = xmlText;
 
                 // Extract numeric fields once XML is loaded

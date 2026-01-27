@@ -137,77 +137,85 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                 {!selectedTemplate ? (
                     <>
                         {/* Filters & Search */}
+                        {/* Filters & Search */}
                         <div style={{
-                            padding: '1rem 2rem',
+                            padding: '1.5rem 2rem',
                             background: 'rgba(15, 23, 42, 0.2)',
                             display: 'flex',
+                            flexDirection: 'column',
                             gap: '1.5rem',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            justifyContent: 'space-between'
+                            borderBottom: '1px solid rgba(255,255,255,0.05)'
                         }}>
-                            {/* Admin Toggle */}
+                            {/* User/Admin Role & Mode Switches */}
                             {isAdmin && (
-                                <div style={{ width: '100%', display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: 'rgba(15, 23, 42, 0.4)', padding: '6px', borderRadius: '10px', alignSelf: 'flex-start' }}>
                                     <button
                                         onClick={() => setShowPending(false)}
                                         style={{
-                                            flex: 1, padding: '8px', borderRadius: '8px',
-                                            background: !showPending ? '#6366f1' : 'rgba(30,41,59,0.5)',
-                                            color: !showPending ? 'white' : '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
-                                            fontWeight: 'bold', cursor: 'pointer'
+                                            padding: '8px 16px', borderRadius: '8px',
+                                            background: !showPending ? '#6366f1' : 'transparent',
+                                            color: !showPending ? 'white' : '#94a3b8',
+                                            border: !showPending ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                                            fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s'
                                         }}
-                                    >Onaylanmış Şablonlar</button>
+                                    >Onaylanmış</button>
                                     <button
                                         onClick={() => setShowPending(true)}
                                         style={{
-                                            flex: 1, padding: '8px', borderRadius: '8px',
-                                            background: showPending ? '#f59e0b' : 'rgba(30,41,59,0.5)',
-                                            color: showPending ? 'white' : '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
-                                            fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                            padding: '8px 16px', borderRadius: '8px',
+                                            background: showPending ? '#f59e0b' : 'transparent',
+                                            color: showPending ? 'white' : '#94a3b8',
+                                            border: showPending ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                                            fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', transition: 'all 0.2s'
                                         }}
                                     ><Clock size={16} /> Onay Bekleyenler</button>
                                 </div>
                             )}
-                            <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
-                                <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Tasarım ara..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    style={{
-                                        width: '100%', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '12px', padding: '0.75rem 1rem 0.75rem 2.5rem', color: 'white', outline: 'none'
-                                    }}
-                                />
-                            </div>
-                            <div style={{
-                                display: 'flex',
-                                gap: '8px',
-                                overflowX: 'auto',
-                                padding: '4px 0',
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none'
-                            }}>
-                                {categories.map(cat => (
-                                    <button
-                                        key={cat}
-                                        onClick={() => setActiveCategory(cat)}
+
+                            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ position: 'relative', flex: '1 1 300px', minWidth: '280px' }}>
+                                    <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Şablonlarda ara..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
                                         style={{
-                                            padding: '0.6rem 1.2rem', borderRadius: '10px', fontSize: '0.85rem',
-                                            background: activeCategory === cat ? '#6366f1' : 'rgba(30, 41, 59, 0.5)',
-                                            color: activeCategory === cat ? 'white' : '#94a3b8',
-                                            border: '1px solid',
-                                            borderColor: activeCategory === cat ? '#6366f1' : 'rgba(255,255,255,0.05)',
-                                            cursor: 'pointer', transition: 'all 0.2s',
-                                            whiteSpace: 'nowrap',
-                                            flexShrink: 0
+                                            width: '100%', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)',
+                                            borderRadius: '12px', padding: '0.85rem 1rem 0.85rem 2.5rem', color: 'white', outline: 'none',
+                                            fontSize: '0.9rem'
                                         }}
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
+                                    />
+                                </div>
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    overflowX: 'auto',
+                                    paddingBottom: '4px',
+                                    flex: '1',
+                                    scrollbarWidth: 'none',
+                                    msOverflowStyle: 'none',
+                                    alignItems: 'center'
+                                }}>
+                                    {categories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setActiveCategory(cat)}
+                                            style={{
+                                                padding: '0.6rem 1.2rem', borderRadius: '10px', fontSize: '0.85rem',
+                                                background: activeCategory === cat ? '#6366f1' : 'rgba(30, 41, 59, 0.5)',
+                                                color: activeCategory === cat ? 'white' : '#94a3b8',
+                                                border: '1px solid',
+                                                borderColor: activeCategory === cat ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                                                cursor: 'pointer', transition: 'all 0.2s',
+                                                whiteSpace: 'nowrap',
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
