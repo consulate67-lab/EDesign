@@ -23,6 +23,8 @@ export interface DesignElement {
   rowHeights?: number[]; // For table elements
   tableData?: TableCell[][]; // For table elements
   shapeType?: 'rect' | 'circle' | 'line'; // For shape elements
+  format?: string; // e.g., 'number', 'currency', 'percentage'
+  decimals?: number; // Number of decimal places
 }
 
 export interface XsltElementOverride {

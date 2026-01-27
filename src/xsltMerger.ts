@@ -71,6 +71,22 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         .join(';');
     };
 
+    // Inject Turkish decimal format helper if not present
+    if (!result.includes('xsl:decimal-format name="tr"')) {
+      const insertion = result.indexOf('>'); // End of stylesheet tag roughly
+      const stylesheetEnd = result.indexOf('>');
+      if (stylesheetEnd > -1) {
+        // Check if it's actually the xml declaration by checking content
+        // We'll safely insert it before the first xsl:template or xsl:output
+        const firstChild = result.search(/<xsl:(template|output|variable|param)/);
+        if (firstChild > -1) {
+          result = result.slice(0, firstChild) +
+            '<xsl:decimal-format name="tr" decimal-separator="," grouping-separator="." />\n' +
+            result.slice(firstChild);
+        }
+      }
+    }
+
     const elementsXsl = state.elements.map(el => {
       let content = '';
       const elStyle = styleToCssForNew({
@@ -81,8 +97,28 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         zIndex: 1000
       });
 
+
       if (el.type === 'text') {
-        const inner = el.binding ? `<xsl:value-of select="${el.binding}"/>` : el.content;
+        let inner = el.content;
+        if (el.binding) {
+          if (el.format && (el.format === 'number' || el.format === 'currency' || el.format === 'percentage')) {
+            const dec = el.decimals !== undefined ? el.decimals : 2;
+            const zeros = '0'.repeat(dec);
+            const pattern = `#.##0,${zeros}`;
+
+            let valExpr = `format-number(${el.binding}, '${pattern}', 'tr')`;
+
+            if (el.format === 'currency') {
+              inner = `₺ ${`<xsl:value-of select="${valExpr}"/>`}`;
+            } else if (el.format === 'percentage') {
+              inner = `%${`<xsl:value-of select="${valExpr}"/>`}`;
+            } else {
+              inner = `<xsl:value-of select="${valExpr}"/>`;
+            }
+          } else {
+            inner = `<xsl:value-of select="${el.binding}"/>`;
+          }
+        }
         content = `<span style="display:inline-block; word-break:break-word; width:100%; ${styleToCssForNew(el.style, true)}">${inner}</span>`;
       } else if (el.type === 'formula') {
         content = `<strong style="${styleToCssForNew(el.style, true)}"><xsl:value-of select="${el.content}"/></strong>`;

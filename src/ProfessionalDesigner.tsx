@@ -36,7 +36,11 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const [availableNumericFields, setAvailableNumericFields] = useState<{ path: string, name: string, value: string }[]>([]);
     const [history, setHistory] = useState<DesignState[]>([]);
     // New state for "Click-to-Place" functionality
-    const [placingMode, setPlacingMode] = useState<{ type: DesignElement['type'], content?: string, shapeType?: 'rect' | 'circle' | 'line', clonedElement?: DesignElement } | null>(null);
+    const [placingMode, setPlacingMode] = useState<{ type: DesignElement['type'], content?: string, shapeType?: 'rect' | 'circle' | 'line', clonedElement?: DesignElement, binding?: string, format?: string } | null>(null);
+
+    // New state for "Add Field" modal
+    const [showFieldModal, setShowFieldModal] = useState(false);
+    const [allXmlFields, setAllXmlFields] = useState<{ path: string, name: string, value: string, isNumeric: boolean }[]>([]);
 
 
     const saveHistory = () => {
@@ -107,8 +111,10 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 console.error("❌ Initial load error:", err);
             }
         };
+        // Reset cache when template changes
+        xmlCache.current = null;
         loadData();
-    }, [template, customContent]);
+    }, [template, customContent, moduleId]);
 
     // Helper to clean styles for inner elements (removes positioning)
     const cleanStyle = (style?: React.CSSProperties): React.CSSProperties => {
@@ -125,6 +131,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             if (temp.includes('arsiv') || temp.includes('mikro')) return 'e-arsiv-detail.xml';
             if (temp.includes('net') || temp.includes('ticaret')) return 'e-ticaret-detail.xml';
             if (temp.includes('ihracat')) return 'e-ihracat-detail.xml';
+            if (temp.includes('fatura')) return 'e-fatura-detail.xml';
+            // Default based on template naming convention if possible
             return 'e-fatura-detail.xml';
         }
 
@@ -144,23 +152,24 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const extractNumericFields = (xmlText: string) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(xmlText, 'text/xml');
-        const fields: { path: string, name: string, value: string }[] = [];
+        const fields: { path: string, name: string, value: string, isNumeric: boolean }[] = [];
 
         const traverse = (node: Node, path: string = '') => {
             if (node.nodeType === 1) { // Element
                 const el = node as Element;
                 const currentPath = path ? `${path}/${el.tagName}` : el.tagName;
 
+                // Capture ALL leaf nodes, not just numeric ones for the "Add Field" list
                 if (el.children.length === 0) {
                     const val = el.textContent?.trim() || '';
-                    // Numeric check: digits, dots, commas, minus
-                    if (val && /^[\d.,\-]+$/.test(val)) {
-                        fields.push({
-                            path: currentPath,
-                            name: el.tagName,
-                            value: val
-                        });
-                    }
+                    const isNum = val && /^[\d.,\-]+$/.test(val);
+
+                    fields.push({
+                        path: currentPath,
+                        name: el.tagName,
+                        value: val,
+                        isNumeric: !!isNum
+                    });
                 } else {
                     Array.from(el.childNodes).forEach(child => traverse(child, currentPath));
                 }
@@ -168,7 +177,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         };
 
         traverse(doc.documentElement);
-        return fields;
+        // Remove duplicates based on path
+        const uniqueFields = fields.filter((v, i, a) => a.findIndex(t => t.path === v.path) === i);
+        return uniqueFields;
     };
 
     const xmlCache = useRef<string | null>(null);
@@ -189,8 +200,10 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 xmlCache.current = xmlText;
 
                 // Extract numeric fields once XML is loaded
-                const numericFields = extractNumericFields(xmlText);
-                setAvailableNumericFields(numericFields);
+                const allFields = extractNumericFields(xmlText);
+                setAllXmlFields(allFields);
+                // Backward compatibility for the numeric dropdown
+                setAvailableNumericFields(allFields.filter(f => f.isNumeric));
             }
             console.log('✅ XML loaded, length:', xmlText.length);
 
@@ -641,6 +654,93 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 onSuccess={(credits) => setUserInfo(prev => prev ? { ...prev, credits } : null)}
             />
 
+            {/* Field Selection Modal */}
+            {showFieldModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '500px', maxHeight: '80vh', background: '#1e293b', borderRadius: '16px', display: 'flex', flexDirection: 'column', border: '1px solid #334155', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>XML Veri Alanı Ekle</h3>
+                            <button onClick={() => setShowFieldModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={24} /></button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+                            <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+                                {allXmlFields.length > 0 ? (
+                                    allXmlFields.map((field, idx) => (
+                                        <div key={idx} style={{ background: '#0f172a', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #334155' }}>
+                                            <div style={{ overflow: 'hidden' }}>
+                                                <div style={{ color: '#60a5fa', fontSize: '0.8rem', fontWeight: 'bold' }}>{field.name}</div>
+                                                <div style={{ color: '#64748b', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{field.path}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '4px' }}>Örnek: <span style={{ color: '#e2e8f0' }}>{field.value}</span></div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setShowFieldModal(false);
+                                                    setPlacingMode({
+                                                        type: 'text',
+                                                        content: `{${field.name}}`, // Show simplified binding name in UI
+                                                        binding: field.path, // Store full path
+                                                        format: field.isNumeric ? 'number' : undefined // Default format if numeric
+                                                    });
+                                                    setNotification({ message: 'Alanı yerleştirmek için tıklayın...', type: 'success' });
+                                                }}
+                                                style={{ padding: '6px 12px', background: '#3b82f6', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
+                                            >
+                                                Ekle
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Yüklü XML bulunamadı veya ayrıştırılamadı.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Numeric Formatting Options */}
+                        {selectedElement && selectedElement.binding && (selectedElement.format || allXmlFields.find(f => f.path === selectedElement.binding)?.isNumeric) && (
+                            <div className="property-section" style={{ marginTop: '1rem', background: 'rgba(30, 41, 59, 0.4)', borderRadius: '12px', padding: '10px' }}>
+                                <label style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Sayısal Biçimlendirme</label>
+                                <div style={{ display: 'grid', gap: '8px' }}>
+                                    <div className="form-group">
+                                        <label style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>Format Türü</label>
+                                        <select
+                                            className="input-field"
+                                            style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: 'white', padding: '4px', fontSize: '0.75rem', borderRadius: '4px' }}
+                                            value={selectedElement.format || 'number'}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setState(prev => ({
+                                                    ...prev,
+                                                    elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, format: val } : el)
+                                                }));
+                                            }}
+                                        >
+                                            <option value="number">Standart Sayı (1.234,56)</option>
+                                            <option value="currency">Para Birimi (₺1.234,56)</option>
+                                            <option value="percentage">Yüzde (%12)</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>Ondalık Basamak</label>
+                                        <input
+                                            type="number" min="0" max="4"
+                                            className="input-field"
+                                            style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: 'white', padding: '4px', fontSize: '0.75rem', borderRadius: '4px' }}
+                                            value={selectedElement.decimals !== undefined ? selectedElement.decimals : 2}
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value);
+                                                setState(prev => ({
+                                                    ...prev,
+                                                    elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, decimals: val } : el)
+                                                }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
             <input
                 type="file"
                 ref={fileInputRef}
@@ -761,6 +861,12 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                             <Box size={14} /> NESNE KÜTÜPHANESİ
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '1.5rem' }}>
+                            <button
+                                onClick={() => setShowFieldModal(true)}
+                                style={{ gridColumn: 'span 4', height: '36px', background: '#3b82f6', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                <Sparkles size={16} /> XML Veri Alanı Ekle
+                            </button>
                             {[
                                 { id: 'text', icon: <Type size={20} />, label: 'Metin', action: () => initiateAddElement('text', 'Yeni Metin') },
                                 { id: 'table', icon: <LucideTable size={20} />, label: 'Tablo', action: () => initiateAddElement('table') },
@@ -1430,7 +1536,11 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                                                 border: isActive ? '1px solid #6366f1' : '1px solid #1e293b',
                                                                                 background: isActive ? '#6366f122' : 'transparent'
                                                                             }}
-                                                                            onClick={() => setSelectedCell({ row: ri, col: ci })}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setSelectedCell({ row: ri, col: ci });
+                                                                                setState(prev => ({ ...prev, selectedId: selectedElement.id }));
+                                                                            }}
                                                                         >
                                                                             <input
                                                                                 style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', padding: '2px', outline: 'none' }}
@@ -2073,18 +2183,31 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                             const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
                                             const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
 
-                                            const { type, content, shapeType, clonedElement } = placingMode;
-
-                                            if (clonedElement) {
-                                                const placedEl = { ...clonedElement, x: snapX, y: snapY };
+                                            if (placingMode.clonedElement) {
+                                                const placedEl = { ...placingMode.clonedElement, x: snapX, y: snapY };
                                                 setState(prev => ({ ...prev, elements: [...prev.elements, placedEl], selectedId: placedEl.id }));
                                                 setNotification({ message: 'Kopya yerleştirildi.', type: 'success' });
-                                            } else if (type === 'shape' && shapeType) {
-                                                addElement('shape', shapeType, snapX, snapY);
+                                                setPlacingMode(null);
+                                            } else if (placingMode.type === 'shape' && placingMode.shapeType) {
+                                                addElement('shape', placingMode.shapeType, snapX, snapY);
                                             } else {
-                                                addElement(type, content, snapX, snapY);
+                                                // Handle binding and format if present (from XML field adder)
+                                                const { type, content, binding, format } = placingMode;
+                                                const newEl: DesignElement = {
+                                                    id: Math.random().toString(36).substr(2, 9),
+                                                    type: type,
+                                                    x: snapX,
+                                                    y: snapY,
+                                                    content: content || 'Yeni Metin',
+                                                    style: { fontSize: '12px', color: '#000000', position: 'absolute' as any },
+                                                    binding: binding,
+                                                    format: format
+                                                };
+                                                setState(prev => ({ ...prev, elements: [...prev.elements, newEl], selectedId: newEl.id }));
+                                                setNotification({ message: 'Alan başarıyla eklendi.', type: 'success' });
+                                                setPlacingMode(null);
                                             }
-                                            setPlacingMode(null);
+                                            return;
                                         }}
                                     />
                                 )}
