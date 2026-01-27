@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Search, Filter, Check, Layout, Sparkles, FileText } from 'lucide-react';
+import { X, Search, Filter, Check, Layout, Sparkles, FileText, CheckCircle, Trash2, Clock } from 'lucide-react';
 import { xsltTemplates, XSLTTemplate } from './templates';
+import { api } from './api';
 
 interface TemplateGalleryProps {
     isOpen: boolean;
@@ -21,12 +22,67 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
     const [searchTerm, setSearchTerm] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>('Hepsi');
     const [selectedTemplate, setSelectedTemplate] = useState<XSLTTemplate | null>(null);
+    const [dynamicTemplates, setDynamicTemplates] = useState<any[]>([]);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [showPending, setShowPending] = useState(false); // Admin Toggle
+
+    React.useEffect(() => {
+        if (isOpen) {
+            // Check Role
+            api.getMe().then(user => {
+                if (user && user.role === 'admin') {
+                    setIsAdmin(true);
+                }
+            });
+
+            // Load Approved Templates
+            api.getTemplates('approved').then((temps: any) => {
+                setDynamicTemplates(temps);
+            });
+        }
+    }, [isOpen]);
+
+    // Load pending if Admin and toggle is on
+    React.useEffect(() => {
+        if (isAdmin && showPending) {
+            api.getTemplates('pending').then((temps: any) => {
+                setDynamicTemplates(temps);
+            });
+        } else if (isOpen) {
+            // Re-load approved
+            api.getTemplates('approved').then((temps: any) => {
+                setDynamicTemplates(temps);
+            });
+        }
+    }, [isAdmin, showPending, isOpen]);
+
+    const handleApprove = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (confirm('Bu tasarımı onaylamak istiyor musunuz?')) {
+            await api.approveTemplate(id);
+            // Refresh
+            const temps = await api.getTemplates('pending');
+            setDynamicTemplates(temps as any);
+        }
+    };
+
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (confirm('Bu tasarımı silmek istiyor musunuz?')) {
+            await api.deleteTemplate(id);
+            // Refresh
+            const temps = await api.getTemplates(showPending ? 'pending' : 'approved');
+            setDynamicTemplates(temps as any);
+        }
+    };
 
     if (!isOpen) return null;
 
-    const categories = ['Hepsi', ...new Set(xsltTemplates.map(t => t.category))];
+    const allTemplates = showPending ? dynamicTemplates : [...xsltTemplates, ...dynamicTemplates];
+    // Consolidate categories
+    const categories = ['Hepsi', ...new Set(allTemplates.map(t => t.category))];
 
-    const filteredTemplates = xsltTemplates.filter(t => {
+    const filteredTemplates = allTemplates.filter(t => {
         const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             t.description.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = activeCategory === 'Hepsi' || t.category === activeCategory;
@@ -90,6 +146,29 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                             flexWrap: 'wrap',
                             justifyContent: 'space-between'
                         }}>
+                            {/* Admin Toggle */}
+                            {isAdmin && (
+                                <div style={{ width: '100%', display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                    <button
+                                        onClick={() => setShowPending(false)}
+                                        style={{
+                                            flex: 1, padding: '8px', borderRadius: '8px',
+                                            background: !showPending ? '#6366f1' : 'rgba(30,41,59,0.5)',
+                                            color: !showPending ? 'white' : '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
+                                            fontWeight: 'bold', cursor: 'pointer'
+                                        }}
+                                    >Onaylanmış Şablonlar</button>
+                                    <button
+                                        onClick={() => setShowPending(true)}
+                                        style={{
+                                            flex: 1, padding: '8px', borderRadius: '8px',
+                                            background: showPending ? '#f59e0b' : 'rgba(30,41,59,0.5)',
+                                            color: showPending ? 'white' : '#94a3b8', border: '1px solid rgba(255,255,255,0.1)',
+                                            fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                        }}
+                                    ><Clock size={16} /> Onay Bekleyenler</button>
+                                </div>
+                            )}
                             <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
                                 <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                                 <input
@@ -178,6 +257,35 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                                         <button className="btn-primary" style={{ marginTop: 'auto', width: '100%', padding: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                             <Sparkles size={14} /> Şablonu Seç
                                         </button>
+
+                                        {/* Admin Actions */}
+                                        {isAdmin && (
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                                {showPending && (
+                                                    <button
+                                                        onClick={(e) => handleApprove(e, template.id)}
+                                                        className="btn-success"
+                                                        style={{
+                                                            flex: 1, padding: '6px', fontSize: '0.75rem',
+                                                            background: 'rgba(16, 185, 129, 0.2)', color: '#10b981',
+                                                            border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '6px',
+                                                            cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px'
+                                                        }}>
+                                                        <CheckCircle size={14} /> Onayla
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={(e) => handleDelete(e, template.id)}
+                                                    style={{
+                                                        padding: '6px', fontSize: '0.75rem',
+                                                        background: 'rgba(239, 68, 68, 0.2)', color: '#f87171',
+                                                        border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px',
+                                                        cursor: 'pointer'
+                                                    }} title="Sil / Reddet">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

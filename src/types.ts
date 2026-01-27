@@ -50,6 +50,7 @@ export interface DesignState {
   companyName: string;
   logoUrl?: string;
   selectedId: string | null;
+  selectedIds: string[]; // NEW: Multi-selection support
   selectedXsltElement: XsltElementOverride | null; // NEW: Currently selected XSLT element
   themeColor?: string; // NEW: Global theme color for the document
 }

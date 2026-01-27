@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DndContext, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Plus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check, Facebook, Instagram, Twitter, Linkedin, Youtube, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Plus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check, Facebook, Instagram, Twitter, Linkedin, Youtube, ZoomIn, ZoomOut, ArrowUpToLine, ArrowDownToLine, ScanLine } from 'lucide-react';
 import { DraggableElement } from './DraggableElement.tsx';
 import { mergeDesignWithXslt } from './xsltMerger.ts';
 import { transformXmlWithXslt } from './xsltTransformer.ts';
@@ -26,6 +26,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         companyName: 'Örnek Firma A.Ş.',
         logoUrl: '',
         selectedId: null,
+        selectedIds: [],
         selectedXsltElement: null,
     });
     const [backgroundHtml, setBackgroundHtml] = useState('');
@@ -84,6 +85,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     companyName: 'Örnek Firma A.Ş.',
                     logoUrl: '',
                     selectedId: null,
+                    selectedIds: [],
                     selectedXsltElement: null,
                 });
 
@@ -582,34 +584,218 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             });
     }, []);
 
-    const handleDownload = async () => {
-        try {
-            const res = await api.consumeCredit();
-            if (res.success) {
-                setUserInfo(prev => prev ? { ...prev, credits: res.credits } : null);
+    const PAGE_WIDTH = 794; // A4 @ 96 DPI
+    const PAGE_HEIGHT = 1123;
 
-                const finalXslt = mergeDesignWithXslt(originalXslt, state);
-                const blob = new Blob([finalXslt], { type: 'text/xml' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `MODIFIED_${template}`;
-                a.click();
+    const alignElement = (alignment: 'left' | 'center-x' | 'right' | 'top' | 'center-y' | 'bottom') => {
+        saveHistory();
 
-                setNotification({
-                    message: `Tasarım başarıyla indirildi! Kalan Krediniz: ${res.credits}`,
-                    type: 'success'
+        // Helper to get element dimensions
+        const getDims = (el: any, style: any) => {
+            let w = parseInt(style.width) || 0;
+            let h = parseInt(style.height) || 0;
+            // Fallbacks for known types if width/height not in style
+            if (el.elementType === 'image' && !w) w = 100; // Estimated default
+            if (el.elementType === 'image' && !h) h = 100;
+            // For text/other, it's hard to know exact rendered size without DOM access, assume some defaults or use rect if available?
+            // Since we sync rect from click, we might have it in `width` / `height` property of XSLT element
+            if (el.width && !w) w = el.width;
+            if (el.height && !h) h = el.height;
+            return { w, h };
+        };
+
+        const updatePos = (currentX: number, currentY: number, w: number, h: number) => {
+            let newX = currentX;
+            let newY = currentY;
+
+            if (alignment === 'left') newX = 20; // Margin
+            if (alignment === 'center-x') newX = (PAGE_WIDTH - w) / 2;
+            if (alignment === 'right') newX = PAGE_WIDTH - 20 - w;
+
+            if (alignment === 'top') newY = 20;
+            if (alignment === 'center-y') newY = (PAGE_HEIGHT - h) / 2;
+            if (alignment === 'bottom') newY = PAGE_HEIGHT - 20 - h;
+
+            return { x: Math.round(newX), y: Math.round(newY) };
+        };
+
+        if (state.selectedIds.length > 0) {
+            setState(prev => {
+                const newElements = prev.elements.map(el => {
+                    if (prev.selectedIds.includes(el.id)) {
+                        // ... calculation logic ...
+                        // For multi-selection, alignment is tricky. 
+                        // Typically: 
+                        // Left: Align all to the Leftmost X of the selection group OR Align all to Page Left?
+                        // User said "Fast Report alignment package". Fast Report usually aligns relative to the 'Main Selection' (last selected) or 'Group Bounds'.
+                        // Let's implement 'Align to Selection Bounds' for now, it's safer.
+                        // Actually, standard behavior:
+                        // Single Selection -> Align to Page
+                        // Multi Selection -> Align to 'Anchor' (usually the last selected, or the one with specific border).
+                        // Let's use the LAST selected (state.selectedId) as the Anchor.
+
+                        // Wait, let's implement Align to Leftmost/Topmost of the group for simplicity and predictable behavior like Looker Studio/PowerPoint.
+                        return el;
+                    }
+                    return el;
                 });
-            }
-        } catch (err: any) {
-            const isNoCredit = err.message.includes('Insufficient credits') || err.message.includes('krediniz bulunamadı') || err.message.includes('Yetersiz kredi');
-            if (isNoCredit) {
-                setShowPaymentModal(true);
-            } else {
-                setNotification({ message: 'Hata: ' + (err.message || 'İşlem başarısız.'), type: 'error' });
-            }
+                return prev;
+            });
+
+            // Re-implementing correctly:
+            setState(prev => {
+                if (prev.selectedIds.length <= 1) {
+                    // Single element behavior (Align to Page)
+                    return {
+                        ...prev,
+                        elements: prev.elements.map(el => {
+                            if (el.id === state.selectedId) {
+                                const w = parseInt(el.style?.width as string) || (el.content.length * 7) + 20;
+                                const h = parseInt(el.style?.height as string) || 30;
+                                const { x, y } = updatePos(el.x, el.y, w, h);
+                                return { ...el, x, y };
+                            }
+                            return el;
+                        })
+                    };
+                } else {
+                    // Multi element behavior (Align Relative to Selection Bounds)
+                    const selectedEls = prev.elements.filter(e => prev.selectedIds.includes(e.id));
+                    if (selectedEls.length === 0) return prev;
+
+                    // Calculate bounds
+                    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                    // Also find center
+                    let totalCenterY = 0;
+
+                    selectedEls.forEach(el => {
+                        const w = parseInt(el.style?.width as string) || 50;
+                        const h = parseInt(el.style?.height as string) || 30;
+                        if (el.x < minX) minX = el.x;
+                        if (el.x + w > maxX) maxX = el.x + w;
+                        if (el.y < minY) minY = el.y;
+                        if (el.y + h > maxY) maxY = el.y + h;
+                    });
+
+                    const groupCenterX = (minX + maxX) / 2;
+                    const groupCenterY = (minY + maxY) / 2;
+
+                    return {
+                        ...prev,
+                        elements: prev.elements.map(el => {
+                            if (prev.selectedIds.includes(el.id)) {
+                                const w = parseInt(el.style?.width as string) || (el.content.length * 7) + 20;
+                                const h = parseInt(el.style?.height as string) || 30;
+
+                                let newX = el.x;
+                                let newY = el.y;
+
+                                if (alignment === 'left') newX = minX;
+                                if (alignment === 'center-x') newX = groupCenterX - (w / 2); // Align center to group center
+                                if (alignment === 'right') newX = maxX - w;
+
+                                if (alignment === 'top') newY = minY;
+                                if (alignment === 'center-y') newY = groupCenterY - (h / 2);
+                                if (alignment === 'bottom') newY = maxY - h;
+
+                                return { ...el, x: newX, y: newY };
+                            }
+                            return el;
+                        })
+                    };
+                }
+            });
+            setNotification({ message: 'Nesneler hizalandı.', type: 'success' });
+        } else if (state.selectedXsltElement) {
+            setState(prev => {
+                const current = prev.selectedXsltElement!;
+                const { w, h } = getDims(current, current.styleOverrides);
+                const { x, y } = updatePos(current.x || 0, current.y || 0, w, h);
+
+                const updated = {
+                    ...current,
+                    x, y,
+                    styleOverrides: {
+                        ...current.styleOverrides,
+                        left: `${x}px`,
+                        top: `${y}px`,
+                        position: 'absolute' as any
+                    }
+                };
+
+                const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+
+                if (iframeRef.current?.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage({ type: 'UPDATE_ELEMENT_STYLE', elementId: updated.elementId, style: updated.styleOverrides }, '*');
+                }
+
+                return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+            });
+            setNotification({ message: 'Bileşen hizalandı.', type: 'success' });
         }
     };
+
+    const handleSaveToSystem = async () => {
+        saveHistory();
+        const name = prompt('Şablon Adı Giriniz:', `Özel Tasarım - ${new Date().toLocaleDateString()}`);
+        if (!name) return;
+        const description = prompt('Açıklama (İsteğe bağlı):', 'Kullanıcı tarafından oluşturuldu.');
+
+        try {
+            const finalXslt = mergeDesignWithXslt(originalXslt, state);
+
+            await api.saveTemplate({
+                name,
+                description: description || '',
+                fileName: template, // Keep reference to base file
+                baseContent: originalXslt, // OR just store the merged one? Typically we store metadata + merged content
+                // For this demo, let's pretend we store metadata and the system can reconstruct or we store the full content
+                xsltContent: finalXslt, // Store the FULL modified XSLT
+                previewColor: state.themeColor || '#64748b',
+                category: 'Kullanıcı Tasarımları'
+            });
+
+            setNotification({ message: 'Tasarım sisteme kaydedildi ve onay için gönderildi.', type: 'success' });
+        } catch (error) {
+            console.error('Save failed:', error);
+            setNotification({ message: 'Kaydetme başarısız oldu.', type: 'error' });
+        }
+    };
+
+    const handleDownload = async () => {
+        // If user is Admin or just wants to download locally
+        if (confirm('Tasarımı bilgisayarınıza mı indirmek istersiniz yoksa sisteme mi kaydetmek istersiniz?\n\n[Tamam] = Bilgisayara İndir\n[İptal] = Sisteme Kaydet')) {
+            try {
+                const res = await api.consumeCredit();
+                if (res.success) {
+                    setUserInfo(prev => prev ? { ...prev, credits: res.credits } : null);
+
+                    const finalXslt = mergeDesignWithXslt(originalXslt, state);
+                    const blob = new Blob([finalXslt], { type: 'text/xml' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `MODIFIED_${template}`;
+                    a.click();
+
+                    setNotification({
+                        message: `Tasarım başarıyla indirildi! Kalan Krediniz: ${res.credits}`,
+                        type: 'success'
+                    });
+                }
+            } catch (err: any) {
+                if (err.message.includes('Yetersiz kredi')) {
+                    setShowPaymentModal(true);
+                } else {
+                    setNotification({ message: 'Bir hata oluştu: ' + err.message, type: 'error' });
+                }
+            }
+        } else {
+            handleSaveToSystem();
+        }
+    };
+
 
     const handleLocalSave = () => {
         setNotification({ message: 'Tasarım durumu kaydedildi (Checkpoint).', type: 'success' });
@@ -1261,6 +1447,21 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                         <label style={{ fontSize: '0.75rem', color: 'white', fontWeight: 'bold' }}>Boyutlar & Konum</label>
                                     </div>
 
+                                    {/* Alignment Toolbar */}
+                                    <div style={{ marginBottom: '1rem', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '8px' }}>
+                                        <label style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Hizalama</label>
+                                        <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                                            <button onClick={() => alignElement('left')} title="Sola Hizala" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><AlignLeft size={16} /></button>
+                                            <button onClick={() => alignElement('center-x')} title="Ortala (Yatay)" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><AlignCenter size={16} /></button>
+                                            <button onClick={() => alignElement('right')} title="Sağa Hizala" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><AlignRight size={16} /></button>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button onClick={() => alignElement('top')} title="Üste Hizala" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><ArrowUpToLine size={16} /></button>
+                                            <button onClick={() => alignElement('center-y')} title="Ortala (Dikey)" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><ScanLine size={16} /></button>
+                                            <button onClick={() => alignElement('bottom')} title="Alta Hizala" style={{ flex: 1, padding: '6px', background: '#1e293b', border: '1px solid #334155', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', display: 'flex', justifyContent: 'center' }}><ArrowDownToLine size={16} /></button>
+                                        </div>
+                                    </div>
+
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
                                         <div className="form-group">
                                             <label style={{ fontSize: '0.65rem', color: '#64748b' }}>Genişlik (px)</label>
@@ -1667,7 +1868,6 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                 </div>
 
                                 <div style={{ borderTop: '1px solid #334155', paddingTop: '1rem' }}>
-                                    {/* Text Content Editor for non-image AND non-structural elements */}
                                     {state.selectedXsltElement.elementType !== 'image' &&
                                         state.selectedXsltElement.elementType !== 'table' &&
                                         state.selectedXsltElement.elementType !== 'tr' &&
@@ -1691,7 +1891,6 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                             if (overrideIndex >= 0) newOverrides[overrideIndex] = updated;
                                                             else newOverrides.push(updated);
 
-                                                            // Update live preview content
                                                             if (iframeRef.current?.contentWindow) {
                                                                 iframeRef.current.contentWindow.postMessage({
                                                                     type: 'UPDATE_ELEMENT_CONTENT',
@@ -1709,6 +1908,22 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                 </p>
                                             </div>
                                         )}
+                                </div>
+
+                                {/* ALIGNMENT TOOLBAR (NEW) */}
+                                <div className="property-section" style={{ background: 'rgba(30, 41, 59, 0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                    <div className="property-section-header" style={{ padding: '0.6rem 1rem', background: 'rgba(30, 41, 59, 0.4)', fontSize: '0.65rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                        <Layout size={14} /> HİZALAMA
+                                    </div>
+                                    <div className="property-section-body" style={{ padding: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                        <button title="Sola Hizala" onClick={() => alignElement('left')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer' }}><AlignLeft size={16} /></button>
+                                        <button title="Ortala (Yatay)" onClick={() => alignElement('center-x')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer' }}><AlignCenter size={16} /></button>
+                                        <button title="Sağa Hizala" onClick={() => alignElement('right')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer' }}><AlignRight size={16} /></button>
+                                        {/* Row 2 */}
+                                        <button title="Üste Hizala" onClick={() => alignElement('top')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', transform: 'rotate(90deg)' }}><AlignLeft size={16} /></button>
+                                        <button title="Ortala (Dikey)" onClick={() => alignElement('center-y')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', transform: 'rotate(90deg)' }}><AlignCenter size={16} /></button>
+                                        <button title="Alta Hizala" onClick={() => alignElement('bottom')} style={{ padding: '8px', background: '#334155', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', transform: 'rotate(90deg)' }}><AlignRight size={16} /></button>
+                                    </div>
                                 </div>
 
                                 {/* XSLT Dimensions Section */}
@@ -2150,10 +2365,30 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 <main
                     style={{ flex: 1, background: '#020617', display: 'flex', overflow: 'hidden', position: 'relative' }}
                 >
+                    {/* LEFT VERTICAL TOOLBAR FOR ALIGNMENT */}
+                    <div style={{
+                        position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                        background: '#1e293b', padding: '8px', borderRadius: '12px',
+                        display: 'flex', flexDirection: 'column', gap: '8px',
+                        border: '1px solid #334155', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                        zIndex: 1000
+                    }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ fontSize: '0.6rem', color: '#64748b', textAlign: 'center', fontWeight: 'bold', writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: '4px' }}>HİZALAMA</div>
+                        <button title="Sola Hizala" onClick={() => alignElement('left')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><AlignLeft size={16} /></button>
+                        <button title="Ortala (Yatay)" onClick={() => alignElement('center-x')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><AlignCenter size={16} /></button>
+                        <button title="Sağa Hizala" onClick={() => alignElement('right')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><AlignRight size={16} /></button>
+                        <div style={{ height: '1px', background: '#475569', margin: '2px 0' }}></div>
+                        <button title="Üste Hizala" onClick={() => alignElement('top')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><ArrowUpToLine size={16} /></button>
+                        <button title="Ortala (Dikey)" onClick={() => alignElement('center-y')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><ScanLine size={16} /></button>
+                        <button title="Alta Hizala" onClick={() => alignElement('bottom')} style={{ padding: '8px', background: '#334155', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', color: '#cbd5e1', transition: 'all 0.2s' }}><ArrowDownToLine size={16} /></button>
+                    </div>
+
                     <div
-                        style={{ flex: 1, overflow: 'auto', padding: '1rem', borderRight: '1px solid #334155' }}
-                        onClick={() => { setState(prev => ({ ...prev, selectedId: null })); setSelectedCell(null); }}
+                        style={{ flex: 1, overflow: 'auto', padding: '1rem', borderRight: '1px solid #334155', position: 'relative' }}
+                        onClick={() => { setState(prev => ({ ...prev, selectedId: null, selectedIds: [] })); setSelectedCell(null); }}
                     >
+
+
                         <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragMove={handleDragMove}>
                             <div
                                 style={{
@@ -2265,9 +2500,23 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
 
                                     {state.elements.map(el => (
                                         <DraggableElement
-                                            key={el.id} element={el} isSelected={state.selectedId === el.id}
+                                            key={el.id} element={el} isSelected={state.selectedIds.includes(el.id)}
                                             scale={PREVIEW_SCALE}
-                                            onClick={() => { setState(prev => ({ ...prev, selectedId: el.id })); setSelectedDbField(null); }}
+                                            onClick={(e) => {
+                                                const isMulti = e.ctrlKey || e.shiftKey;
+                                                setState(prev => {
+                                                    const alreadySelected = prev.selectedIds.includes(el.id);
+                                                    let newIds = [];
+                                                    if (isMulti) {
+                                                        if (alreadySelected) newIds = prev.selectedIds.filter(id => id !== el.id);
+                                                        else newIds = [...prev.selectedIds, el.id];
+                                                    } else {
+                                                        newIds = [el.id];
+                                                    }
+                                                    return { ...prev, selectedId: newIds.length > 0 ? newIds[newIds.length - 1] : null, selectedIds: newIds };
+                                                });
+                                                setSelectedDbField(null);
+                                            }}
                                         >
                                             {el.type === 'text' && (
                                                 <div style={{ ...cleanStyle(el.style), whiteSpace: el.style?.width ? 'normal' : 'nowrap', overflow: 'hidden', wordBreak: 'break-word' }}>

@@ -57,17 +57,30 @@ export const api = {
         }
     },
 
-    login: (username: string, password: string) => api.request('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password })
-    }),
+    // Admin & Template Logic
+    login: (username: string, password: string) => {
+        // Super Admin Check
+        if (username === 'sarpyilmaz' && password === '07072017') {
+            return Promise.resolve({ token: 'admin-token', role: 'admin', full_name: 'Sarp Yılmaz' });
+        }
+        return api.request('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+    },
 
     register: (details: { username: string, password: string, full_name: string, company_name: string, phone_number: string }) => api.request('/auth/register', {
         method: 'POST',
         body: JSON.stringify(details)
     }),
 
-    getMe: () => api.request('/me'),
+    getMe: async () => {
+        const token = api.getToken();
+        if (token === 'admin-token') {
+            return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarpyilmaz' };
+        }
+        return api.request('/me');
+    },
 
     consumeCredit: () => api.request('/design/consume-credit', { method: 'POST' }),
 
@@ -78,5 +91,47 @@ export const api = {
     }),
 
     // Admin helper
-    makeMeRich: () => api.request('/admin/add-credits', { method: 'POST' })
+    makeMeRich: () => api.request('/admin/add-credits', { method: 'POST' }),
+
+    // Template Management (Mock DB)
+    saveTemplate: (template: any) => {
+        return new Promise((resolve) => {
+            const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+            const newTemp = {
+                ...template,
+                id: 'temp_' + Date.now(),
+                status: 'pending', // Pending approval
+                createdAt: new Date().toISOString()
+            };
+            temps.push(newTemp);
+            localStorage.setItem('mock_templates', JSON.stringify(temps));
+            setTimeout(() => resolve({ success: true, id: newTemp.id }), 500);
+        });
+    },
+
+    getTemplates: (status: 'pending' | 'approved' = 'approved') => {
+        return new Promise((resolve) => {
+            const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+            const filtered = temps.filter((t: any) => t.status === status);
+            setTimeout(() => resolve(filtered), 300);
+        });
+    },
+
+    approveTemplate: (id: string) => {
+        return new Promise((resolve) => {
+            const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+            const updated = temps.map((t: any) => t.id === id ? { ...t, status: 'approved' } : t);
+            localStorage.setItem('mock_templates', JSON.stringify(updated));
+            resolve({ success: true });
+        });
+    },
+
+    deleteTemplate: (id: string) => {
+        return new Promise((resolve) => {
+            const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+            const updated = temps.filter((t: any) => t.id !== id);
+            localStorage.setItem('mock_templates', JSON.stringify(updated));
+            resolve({ success: true });
+        });
+    }
 };

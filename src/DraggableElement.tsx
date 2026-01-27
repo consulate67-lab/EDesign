@@ -6,7 +6,7 @@ import type { DesignElement } from './types.ts';
 interface Props {
     element: DesignElement;
     isSelected: boolean;
-    onClick: () => void;
+    onClick: (e: React.MouseEvent) => void;
     children?: React.ReactNode;
     scale?: number;
 }
@@ -53,7 +53,7 @@ export const DraggableElement: React.FC<Props> = ({ element, isSelected, onClick
             {...attributes}
             onClick={(e) => {
                 e.stopPropagation();
-                onClick();
+                onClick(e);
             }}
         >
             {children}
