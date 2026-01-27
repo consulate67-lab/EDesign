@@ -84,12 +84,11 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
     // Re-using the logic from before for new elements construction
 
     // ... (logic for elementsXsl generation same as before) ...
-    // Detect XSLT Prefix
+    // Detect XSLT Prefix & Namespace
     const xsltNs = 'http://www.w3.org/1999/XSL/Transform';
     let xslPrefix = 'xsl';
-    // Helper to find prefix
+
     if (doc.documentElement) {
-      // logic to finding prefix
       const attrs = doc.documentElement.attributes;
       for (let i = 0; i < attrs.length; i++) {
         if (attrs[i].value === xsltNs && attrs[i].name.startsWith('xmlns:')) {
@@ -114,22 +113,28 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         .join(';');
     };
 
-    // Inject Turkish decimal format helper if not present
-    // Uses the detected prefix
-    const decimalFormatTag = `<${xslPrefix}:decimal-format name="tr" decimal-separator="," grouping-separator="." />`;
-    if (result.indexOf(`:decimal-format name="tr"`) === -1) {
-      // Find where to insert using the detected prefix in regex or generic
-      // We look for :template, :output, etc. with any prefix potentially, but best to use our detected one if consistent
-      const regex = new RegExp(`<(${xslPrefix}|xsl|xslt):template|:output|:variable|:param`);
-      const match = result.match(regex);
-      if (match && match.index !== undefined) {
-        result = result.slice(0, match.index) + decimalFormatTag + '\n' + result.slice(match.index);
+    // Inject Turkish decimal format helper using DOM API
+    // This is much safer than string manipulation
+    const existingDecimalFormats = doc.getElementsByTagNameNS(xsltNs, 'decimal-format');
+    let hasTrFormat = false;
+    for (let i = 0; i < existingDecimalFormats.length; i++) {
+      if (existingDecimalFormats[i].getAttribute('name') === 'tr') {
+        hasTrFormat = true;
+        break;
+      }
+    }
+
+    if (!hasTrFormat && doc.documentElement) {
+      const decimalFormat = doc.createElementNS(xsltNs, `${xslPrefix}:decimal-format`);
+      decimalFormat.setAttribute('name', 'tr');
+      decimalFormat.setAttribute('decimal-separator', ',');
+      decimalFormat.setAttribute('grouping-separator', '.');
+
+      // Insert as first child of stylesheet to ensure it is top-level
+      if (doc.documentElement.firstChild) {
+        doc.documentElement.insertBefore(decimalFormat, doc.documentElement.firstChild);
       } else {
-        // Fallback: insert after root element start
-        const rootEnd = result.indexOf('>');
-        if (rootEnd > -1) {
-          result = result.slice(0, rootEnd + 1) + '\n' + decimalFormatTag + '\n' + result.slice(rootEnd + 1);
-        }
+        doc.documentElement.appendChild(decimalFormat);
       }
     }
 
