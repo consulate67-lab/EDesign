@@ -217,7 +217,6 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             let xmlText = xmlCache.current;
             if (!xmlText) {
                 const xmlFile = getXmlFile(moduleId);
-                const xmlFile = getXmlFile(moduleId);
                 // Robust Fetch Strategy
                 const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
                 const pathsToTry = [
