@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DndContext, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check } from 'lucide-react';
+import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check, Facebook, Instagram, Twitter, Linkedin, Youtube } from 'lucide-react';
 import { DraggableElement } from './DraggableElement.tsx';
 import { mergeDesignWithXslt } from './xsltMerger.ts';
 import { transformXmlWithXslt } from './xsltTransformer.ts';
@@ -35,6 +35,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const [loadError, setLoadError] = useState<string | null>(null);
     const [availableNumericFields, setAvailableNumericFields] = useState<{ path: string, name: string, value: string }[]>([]);
     const [history, setHistory] = useState<DesignState[]>([]);
+    // New state for "Click-to-Place" functionality
+    const [placingMode, setPlacingMode] = useState<{ type: DesignElement['type'], content?: string, shapeType?: 'rect' | 'circle' | 'line' } | null>(null);
+
 
     const saveHistory = () => {
         setHistory(prev => [...prev, JSON.parse(JSON.stringify(state))]);
@@ -273,7 +276,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         return () => window.removeEventListener('message', handleMessage);
     }, [state.xsltOverrides]);
 
-    const addElement = (type: DesignElement['type'], initialContent: string = '') => {
+    // Updated addElement to support specific coordinates
+    const addElement = (type: DesignElement['type'], initialContent: string = '', x: number = 50, y: number = 50, w?: number, h?: number) => {
+
         saveHistory();
         let tableData: TableCell[][] | undefined;
         let colWidths: number[] | undefined;
@@ -290,7 +295,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 [{ content: 'Sütun 1' }, { content: 'Sütun 2' }],
                 [{ content: 'Veri 1' }, { content: 'Veri 2' }]
             ];
-            colWidths = [150, 150];
+            // If specific width provided, distribute it; otherwise default
+            const defaultW = w ? w / 2 : 150;
+            colWidths = [defaultW, defaultW];
             rowHeights = [30, 30];
         }
 
@@ -311,8 +318,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         const newElement: DesignElement = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            x: 50,
-            y: 50,
+            x: x,
+            y: y,
             content: initialContent || (type === 'text' ? 'Yeni Metin' : type === 'formula' ? 'Fiyat * Adet' : type === 'image' ? '' : ''),
             shapeType: (type === 'shape') ? (initialContent as any || 'rect') : undefined,
             style: baseStyle,
@@ -325,10 +332,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         saveHistory();
         setState(prev => ({ ...prev, elements: [...prev.elements, newElement], selectedId: newElement.id }));
         setNotification({ message: `${type === 'shape' ? 'Şekil' : 'Nesne'} başarıyla eklendi.`, type: 'success' });
+        setPlacingMode(null); // Reset placing mode
+    };
+
+    const initiateAddElement = (type: DesignElement['type'], content: string = '', shapeType?: 'rect' | 'circle' | 'line') => {
+        setPlacingMode({ type, content, shapeType });
+        setNotification({ message: 'Eklenecek konumu seçin...', type: 'success' });
     };
 
     const addShape = (shapeType: 'rect' | 'circle' | 'line') => {
-        addElement('shape', shapeType);
+        initiateAddElement('shape', shapeType, shapeType);
     };
 
     const duplicateElement = () => {
@@ -379,7 +392,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, content: base64 } : el)
                 }));
             } else {
-                addElement('image', base64);
+                initiateAddElement('image', base64);
             }
         };
         reader.readAsDataURL(file);
@@ -784,36 +797,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
                             {[
-                                {
-                                    id: 'instagram', icon: 'https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg',
-                                    svg: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRTM0MDUwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIyIiB5PSIyIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHJ4PSI1IiByeT0iNSIgc3Ryb2tlPSIjRTQ0MDUFUiIvPjxwYXRoIGQ9Ik0xNiAxMS4zN2E0IDQgMCAxIDEgLTQuMjQgLTQuMjQgNCA0IDAgMCAxIDQuMjQgNC4yNHoiIHN0cm9rZT0iI0U0NDA1RiIvPjxsaW5lIHgxPSIxNy41IiB4Mj0iMTcuNTEiIHkxPSI2LjUiIHkyPSI2LjUiIHN0cm9rZT0iI0U0NDA1RiIvPjwvc3ZnPg==`
-                                },
-                                {
-                                    id: 'facebook', icon: 'https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg',
-                                    svg: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTg3N0YyIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTggMngxMyAzIDMgMCAwIDAtMiAweC0yIDJ2NGgtNHY0aDR2OWg0djloNHYtOWg0bDEtNGgtNVY2YTEgMSAwIDAgMSAxLTFoMyIvPjwvc3ZnPg==`
-                                },
-                                {
-                                    id: 'twitter', icon: 'https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg',
-                                    svg: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTQgNGwxNiAxNiIvPjxwYXRoIGQ9Ik00IDIwbDE2LTE2Ii8+PC9zdmc+` // Placeholder for X
-                                },
-                                {
-                                    id: 'linkedin', icon: 'https://upload.wikimedia.org/wikipedia/commons/8/81/LinkedIn_icon.svg',
-                                    svg: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMGE2NmMyIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTYgOGEyIDIgMCAwIDEgMiAyNjIgMnY3aC00di03YTEgMSAwIDAgMC0xLTFhMSAxIDAgMCAwLTEgMXY3aC00di0xMGg0djEiLz48cmVjdCB4PSIyIiB5PSI5IiB3aWR0aD0iNCIgaGVpZ2h0PSIxMSIvPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSIyIi8+PC9zdmc+`
-                                },
-                                {
-                                    id: 'youtube', icon: 'https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg',
-                                    svg: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkYwMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjIuNTQgNi40MmEyLjc4IDIuNzggMCAwIDAtMS45NC0ybC0uMTktLjAxdC0uMTkgMGgtMTYuNTJsLS4yLjAxLS4xOS4wMWExLjk0IDIuNzggMCAwIDAtMiAxLjk0IDI4LjU1IDI4LjU1IDAgMCAwLS45NCA2LjUyIDI4LjU1IDI4LjU1IDAgMCAwIC45NCA2LjUyIDIuNzggMi43OCAwIDAgMCAxLjk0IDJsLjE4LjAxLjE4IDBoMTYuNTJsLjI3LS4wMS4yNy0uMDFhMi43OCAy43OCAwIDAgMCAxLjk0LTIgMjguNTUgMjguNTUgMCAwIDAgLjk0LTYuNTIgMjguNTUgMjguNTUgMCAwIDAtLjk0LTYuNTJ6Ii8+PHBvbHlnb24gcG9pbnRzPSI5Ljc1IDE1LjAyIDE1LjUgMTEuNzUgOS43NSA4LjQ4IDkuNzUgMTUuMDIiIGZpbGw9IiNGRjAwMDAiIHN0cm9rZT0ibm9uZSIvPjwvc3ZnPg==`
-                                }
+                                { id: 'instagram', icon: <Instagram size={20} color="#E1306C" />, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>` },
+                                { id: 'facebook', icon: <Facebook size={20} color="#1877F2" />, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1877F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>` },
+                                { id: 'twitter', icon: <Twitter size={20} color="#ffffff" />, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-twitter"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>` },
+                                { id: 'linkedin', icon: <Linkedin size={20} color="#0A66C2" />, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0A66C2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-linkedin"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>` },
+                                { id: 'youtube', icon: <Youtube size={20} color="#FF0000" />, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-youtube"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>` }
                             ].map((item) => (
                                 <button
                                     key={item.id}
                                     onClick={() => {
-                                        // Specific handling for X/Twitter to be black path on transparent
-                                        if (item.id === 'twitter') {
-                                            addElement('image', 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCA0bDE2IDE2Ii8+PHBhdGggZD0iTTQgMjBsMTYtMTYiLz48L3N2Zz4=');
-                                        } else {
-                                            addElement('image', item.svg);
-                                        }
+                                        initiateAddElement('image', `data:image/svg+xml;base64,${btoa(item.svg)}`);
                                     }}
                                     style={{
                                         width: '100%', height: '36px', background: 'rgba(30, 41, 59, 0.5)',
@@ -830,7 +823,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                         e.currentTarget.style.background = 'rgba(30, 41, 59, 0.5)';
                                     }}
                                 >
-                                    <img src={item.svg} style={{ width: '20px', height: '20px' }} alt={item.id} />
+                                    {item.icon}
                                 </button>
                             ))}
                         </div>
@@ -1480,12 +1473,21 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                         x: current.x || 50,
                                                         y: current.y || 50,
                                                         content: '',
-                                                        style: { fontSize: '12px', color: '#000000', width: current.width ? `${current.width}px` : '300px', position: 'absolute' as any },
+                                                        style: {
+                                                            fontSize: '12px',
+                                                            color: '#000000',
+                                                            width: current.width ? `${current.width}px` : '100%',
+                                                            position: 'absolute' as any
+                                                        },
                                                         rows: current.rowCount || 2,
                                                         cols: current.colCount || 2,
-                                                        colWidths: current.colCount ? Array(current.colCount).fill(100) : [150, 150],
-                                                        rowHeights: current.rowCount ? Array(current.rowCount).fill(30) : [30, 30],
-                                                        tableData: current.tableData
+                                                        colWidths: current.colCount
+                                                            ? Array(current.colCount).fill((current.width ? current.width / current.colCount : 150))
+                                                            : [150, 150],
+                                                        rowHeights: current.rowCount
+                                                            ? Array(current.rowCount).fill((current.height ? current.height / current.rowCount : 30))
+                                                            : [30, 30],
+                                                        tableData: current.tableData || Array(current.rowCount || 2).fill(Array(current.colCount || 2).fill({ content: '' }))
                                                     };
                                                     setState(prev => ({ ...prev, xsltOverrides: [...prev.xsltOverrides.filter(o => o.elementId !== updatedXslt.elementId), updatedXslt], elements: [...prev.elements, newElement], selectedXsltElement: null, selectedId: newElement.id }));
                                                     setNotification({ message: 'Tablo düzenlenebilir nesneye dönüştürüldü!', type: 'success' });
@@ -1996,19 +1998,28 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     backgroundImage: 'linear-gradient(45deg, #f8fafc 25%, transparent 25%), linear-gradient(-45deg, #f8fafc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f8fafc 75%), linear-gradient(-45deg, transparent 75%, #f8fafc 75%)',
                                     backgroundSize: '20px 20px',
                                     backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-                                    cursor: state.selectedId ? 'crosshair' : 'default'
+                                    cursor: placingMode ? 'crosshair' : (state.selectedId ? 'move' : 'default')
                                 }}
                                 onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
+                                    const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
+                                    const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
+                                    const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
+
+                                    if (placingMode) {
+                                        // Finalize adding element
+                                        const { type, content, shapeType } = placingMode;
+                                        if (type === 'shape' && shapeType) {
+                                            addElement('shape', shapeType, snapX, snapY);
+                                        } else {
+                                            addElement(type, content, snapX, snapY);
+                                        }
+                                        return;
+                                    }
+
                                     if (state.selectedId) {
-                                        // Click-to-move functionality
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
-                                        const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
-
-                                        // Snap to grid
-                                        const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
-                                        const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
-
+                                        // Click-to-move functionality for existing selection
                                         setState(prev => ({
                                             ...prev,
                                             elements: prev.elements.map(el => {
