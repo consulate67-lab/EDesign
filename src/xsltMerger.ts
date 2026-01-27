@@ -16,6 +16,8 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         .join(';');
     };
 
+
+
     // 1. Apply Overrides (Style + Content)
     state.xsltOverrides.forEach(override => {
       const el = doc.querySelector(`[data-design-id="${override.elementId}"]`);
@@ -50,6 +52,32 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
 
     const serializer = new XMLSerializer();
     let result = serializer.serializeToString(doc);
+
+    // Inject Theme Styles if provided
+    if (state.themeColor) {
+      const themeStyle = `
+        <style>
+            :root { --theme-color: ${state.themeColor}; }
+            h1, h2, h3, h4, strong.title { color: ${state.themeColor} !important; }
+            th { color: ${state.themeColor} !important; border-color: ${state.themeColor} !important; background-color: ${state.themeColor}15 !important; }
+            table, td { border-color: ${state.themeColor}40 !important; }
+            .theme-border { border-color: ${state.themeColor} !important; }
+            .theme-text { color: ${state.themeColor} !important; }
+        </style>
+        `;
+
+      const headEnd = result.indexOf('</head>');
+      if (headEnd > -1) {
+        result = result.slice(0, headEnd) + themeStyle + result.slice(headEnd);
+      } else {
+        // Try body
+        const bodyStart = result.indexOf('<body');
+        if (bodyStart > -1) {
+          const bodyClose = result.indexOf('>', bodyStart) + 1;
+          result = result.slice(0, bodyClose) + themeStyle + result.slice(bodyClose);
+        }
+      }
+    }
 
     // 2. Inject User Added Elements (using existing logic but appending to body)
     // We can just construct the HTML string for new elements and inject before </body>

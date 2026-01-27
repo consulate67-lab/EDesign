@@ -113,6 +113,13 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         };
         // Reset cache when template changes
         xmlCache.current = null;
+
+        // Check for Theme Color passed via customContent
+        if (moduleId === 'library' && customContent && customContent.startsWith('#')) {
+            console.log('🎨 Theme Color Detected:', customContent);
+            setState(prev => ({ ...prev, themeColor: customContent }));
+        }
+
         loadData();
     }, [template, customContent, moduleId]);
 

@@ -86,8 +86,48 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
         reader.readAsText(file);
     };
 
-    const handleTemplateSelect = (template: XSLTTemplate) => {
-        onSelect('library', template.fileName, template.name);
+    const handleTemplateSelect = (template: XSLTTemplate, docTypeId?: string) => {
+        let fileName = template.fileName;
+        let moduleName = template.name;
+
+        if (docTypeId) {
+            const module = modules.find(m => m.id === docTypeId);
+            if (module) {
+                fileName = module.template;
+                moduleName = `${template.name} - ${module.name}`;
+            }
+        }
+
+        // Pass theme color using a special prefix in customContent or via a new prop? 
+        // Since we didn't change App.tsx interface yet, let's look at App.tsx again.
+        // App.tsx interface: (moduleId, template, moduleName, customContent?)
+        // We can pass the theme color in customContent as a JSON string if it's not a file content.
+        // OR, better: We updated App to have `themeColor` in state? No I haven't updated App.tsx yet.
+        // I will adhere to the plan: Update App.tsx NEXT.
+        // So here I will pass it as an extra arg if I can, or piggyback.
+        // Let's assume onSelect can take 5th arg or I update it now.
+        // Let's check SelectionProps. 
+        // interface SelectionProps { onSelect: (moduleId, template, moduleName, customContent?) => void }
+        // I will change SelectionProps AND App.tsx.
+
+        onSelect('library', fileName, moduleName, template.previewColor); // Piggybacking color on customContent for now? 
+        // Wait, customContent is usually file string. If I pass hex code, ProfessionalDesigner might get confused if it expects XML.
+        // ProfessionalDesigner checks `if (customContent)`.
+        // It treats it as XML content.
+
+        // So I MUST update App.tsx first or simultaneously. 
+        // But tool use is sequential. 
+        // I'll update the logic here to match the clearer intent, then update App.tsx.
+        // I will use `customContent` as `themeColor` ONLY IF `moduleId` is 'library'.
+        // Wait, `library` loads `template`.
+        // `custom` loads `customContent`.
+        // If I use `library`, `customContent` is ignored by `ProfessionalDesigner`'s `useEffect`?
+        // Let's check ProfessionalDesigner lines 80-120.
+        // `if (moduleId === 'custom' && customContent) { text = customContent; }`
+        // So if moduleId is 'library', customContent is IGNORED for loading XML. 
+        // PERFECT. I can pass color in customContent!
+
+        onSelect('library', fileName, moduleName, template.previewColor);
         setShowGallery(false);
     };
 

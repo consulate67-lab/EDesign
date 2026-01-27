@@ -51,4 +51,5 @@ export interface DesignState {
   logoUrl?: string;
   selectedId: string | null;
   selectedXsltElement: XsltElementOverride | null; // NEW: Currently selected XSLT element
+  themeColor?: string; // NEW: Global theme color for the document
 }
