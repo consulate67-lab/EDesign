@@ -8,9 +8,10 @@ interface Props {
     isSelected: boolean;
     onClick: () => void;
     children?: React.ReactNode;
+    scale?: number;
 }
 
-export const DraggableElement: React.FC<Props> = ({ element, isSelected, onClick, children }) => {
+export const DraggableElement: React.FC<Props> = ({ element, isSelected, onClick, children, scale = 1 }) => {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
         id: element.id,
     });
@@ -21,11 +22,17 @@ export const DraggableElement: React.FC<Props> = ({ element, isSelected, onClick
         return rest; // Only keep things like width, height, etc. for the wrapper
     };
 
+    const finalTransform = transform ? {
+        ...transform,
+        x: transform.x / scale,
+        y: transform.y / scale
+    } : null;
+
     const style: React.CSSProperties = {
         position: 'absolute',
         left: element.x,
         top: element.y,
-        transform: CSS.Translate.toString(transform),
+        transform: CSS.Translate.toString(finalTransform),
         outline: isSelected ? '2px solid #6366f1' : '1px dashed #cbd5e1',
         outlineOffset: '-1px',
         zIndex: isSelected ? 1000 : 100,

@@ -59,6 +59,14 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const SNAP_SIZE = 5;
     useEffect(() => {
         const loadData = async () => {
+            // Load user info (credits)
+            try {
+                const me = await api.getMe();
+                setUserInfo(me);
+            } catch (error) {
+                console.error('Failed to load user info', error);
+            }
+
             try {
                 // Reset state when a new template is loaded to prevent old overrides from affecting new design
                 setState({
@@ -2094,6 +2102,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     {state.selectedXsltElement && state.selectedXsltElement.x !== undefined && (
                                         <DraggableElement
                                             key={state.selectedXsltElement.elementId}
+                                            scale={PREVIEW_SCALE}
                                             element={{
                                                 id: state.selectedXsltElement.elementId,
                                                 type: 'text', // Dummy type
@@ -2113,6 +2122,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     {state.elements.map(el => (
                                         <DraggableElement
                                             key={el.id} element={el} isSelected={state.selectedId === el.id}
+                                            scale={PREVIEW_SCALE}
                                             onClick={() => { setState(prev => ({ ...prev, selectedId: el.id })); setSelectedDbField(null); }}
                                         >
                                             {el.type === 'text' && (
