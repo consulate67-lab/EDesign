@@ -9,6 +9,7 @@ import { instrumentXslt, selectionScript } from './xsltInstrumenter.ts';
 import { api } from './api';
 import { PaymentModal } from './PaymentModal.tsx';
 import type { DesignElement, DesignState, TableCell, XsltElementOverride } from './types.ts';
+import { standardUBLFields } from './standardFields.ts';
 
 interface ProfessionalDesignerProps {
     template: string;
@@ -671,34 +672,43 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         </div>
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
                             <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
-                                {allXmlFields.length > 0 ? (
-                                    allXmlFields.map((field, idx) => (
-                                        <div key={idx} style={{ background: '#0f172a', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #334155' }}>
-                                            <div style={{ overflow: 'hidden' }}>
-                                                <div style={{ color: '#60a5fa', fontSize: '0.8rem', fontWeight: 'bold' }}>{field.name}</div>
-                                                <div style={{ color: '#64748b', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{field.path}</div>
-                                                <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '4px' }}>Örnek: <span style={{ color: '#e2e8f0' }}>{field.value}</span></div>
+                                {(() => {
+                                    const mergedFields = [
+                                        ...allXmlFields,
+                                        ...standardUBLFields
+                                            .filter(sf => !allXmlFields.some(af => af.path === sf.path))
+                                            .map(sf => ({ name: sf.name, path: sf.path, value: '(Standart Alan)', isNumeric: sf.isNumeric }))
+                                    ];
+
+                                    return mergedFields.length > 0 ? (
+                                        mergedFields.map((field, idx) => (
+                                            <div key={idx} style={{ background: '#0f172a', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #334155' }}>
+                                                <div style={{ overflow: 'hidden' }}>
+                                                    <div style={{ color: '#60a5fa', fontSize: '0.8rem', fontWeight: 'bold' }}>{field.name}</div>
+                                                    <div style={{ color: '#64748b', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{field.path}</div>
+                                                    <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '4px' }}>Örnek: <span style={{ color: '#e2e8f0' }}>{field.value}</span></div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowFieldModal(false);
+                                                        setPlacingMode({
+                                                            type: 'text',
+                                                            content: `{${field.name}}`, // Show simplified binding name in UI
+                                                            binding: field.path, // Store full path
+                                                            format: field.isNumeric ? 'number' : undefined // Default format if numeric
+                                                        });
+                                                        setNotification({ message: 'Alanı yerleştirmek için tıklayın...', type: 'success' });
+                                                    }}
+                                                    style={{ padding: '6px 12px', background: '#3b82f6', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
+                                                >
+                                                    Ekle
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    setShowFieldModal(false);
-                                                    setPlacingMode({
-                                                        type: 'text',
-                                                        content: `{${field.name}}`, // Show simplified binding name in UI
-                                                        binding: field.path, // Store full path
-                                                        format: field.isNumeric ? 'number' : undefined // Default format if numeric
-                                                    });
-                                                    setNotification({ message: 'Alanı yerleştirmek için tıklayın...', type: 'success' });
-                                                }}
-                                                style={{ padding: '6px 12px', background: '#3b82f6', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
-                                            >
-                                                Ekle
-                                            </button>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Yüklü XML bulunamadı veya ayrıştırılamadı.</div>
-                                )}
+                                        ))
+                                    ) : (
+                                        <div style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Yüklü XML bulunamadı veya ayrıştırılamadı.</div>
+                                    )
+                                })()}
                             </div>
                         </div>
 
