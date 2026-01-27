@@ -27,7 +27,7 @@ export interface DesignElement {
 
 export interface XsltElementOverride {
   elementId: string; // Unique ID for the XSLT element
-  elementType: 'field' | 'image' | 'table' | 'tr' | 'td' | 'th'; // Type of element
+  elementType: 'field' | 'image' | 'img' | 'table' | 'tr' | 'td' | 'th'; // Type of element
   path?: string; // XPath or src for the element
   x?: number; // X position relative to the workspace
   y?: number; // Y position relative to the workspace
