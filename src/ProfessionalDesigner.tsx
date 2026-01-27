@@ -736,63 +736,63 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         }
     };
 
-    const handleSaveToSystem = async () => {
-        saveHistory();
-        const name = prompt('Şablon Adı Giriniz:', `Özel Tasarım - ${new Date().toLocaleDateString()}`);
-        if (!name) return;
-        const description = prompt('Açıklama (İsteğe bağlı):', 'Kullanıcı tarafından oluşturuldu.');
+    const handleOneClickSave = async () => {
+        // Unified Save Flow:
+        // 1. Consume Credit
+        // 2. Save to System (Pending Approval)
+        // 3. Download to Computer
+
+        // Auto-generate name so we don't annoy the user with prompts
+        const timestamp = new Date().toLocaleString('tr-TR').replace(/[:\.\s]/g, '_');
+        const defaultName = `Tasarim_${moduleId}_${timestamp}`;
+        // If user really wants to name it, we could ask, but "soru gereksiz" suggests valid defaults are better. 
+        // Let's assume the document Name + Date is sufficient.
 
         try {
+            // 1. Consume Credit first
+            const res = await api.consumeCredit();
+            if (!res.success) throw new Error('Yetersiz kredi');
+
+            setUserInfo(prev => prev ? { ...prev, credits: res.credits } : null);
+
+            // Prepare Content
             const finalXslt = mergeDesignWithXslt(originalXslt, state);
 
+            // 2. Save to System (Pending Approval)
             await api.saveTemplate({
-                name,
-                description: description || '',
-                fileName: template, // Keep reference to base file
-                baseContent: originalXslt, // OR just store the merged one? Typically we store metadata + merged content
-                // For this demo, let's pretend we store metadata and the system can reconstruct or we store the full content
-                xsltContent: finalXslt, // Store the FULL modified XSLT
+                name: defaultName,
+                description: 'Otomatik kayıt (Bilgisayar + Sistem)',
+                fileName: template,
+                baseContent: originalXslt,
+                xsltContent: finalXslt,
                 previewColor: state.themeColor || '#64748b',
-                category: 'Kullanıcı Tasarımları'
+                category: 'Kullanıcı Tasarımları',
+                docType: moduleId // Pass the document type
             });
 
-            setNotification({ message: 'Tasarım sisteme kaydedildi ve onay için gönderildi.', type: 'success' });
-        } catch (error) {
-            console.error('Save failed:', error);
-            setNotification({ message: 'Kaydetme başarısız oldu.', type: 'error' });
-        }
-    };
+            // 3. Download to Computer
+            const blob = new Blob([finalXslt], { type: 'text/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${defaultName}.xslt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
 
-    const handleDownload = async () => {
-        // If user is Admin or just wants to download locally
-        if (confirm('Tasarımı bilgisayarınıza mı indirmek istersiniz yoksa sisteme mi kaydetmek istersiniz?\n\n[Tamam] = Bilgisayara İndir\n[İptal] = Sisteme Kaydet')) {
-            try {
-                const res = await api.consumeCredit();
-                if (res.success) {
-                    setUserInfo(prev => prev ? { ...prev, credits: res.credits } : null);
+            setNotification({
+                message: 'Tasarım bilgisayarınıza indirildi ve onay için sisteme gönderildi.',
+                type: 'success'
+            });
 
-                    const finalXslt = mergeDesignWithXslt(originalXslt, state);
-                    const blob = new Blob([finalXslt], { type: 'text/xml' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `MODIFIED_${template}`;
-                    a.click();
-
-                    setNotification({
-                        message: `Tasarım başarıyla indirildi! Kalan Krediniz: ${res.credits}`,
-                        type: 'success'
-                    });
-                }
-            } catch (err: any) {
-                if (err.message.includes('Yetersiz kredi')) {
-                    setShowPaymentModal(true);
-                } else {
-                    setNotification({ message: 'Bir hata oluştu: ' + err.message, type: 'error' });
-                }
+        } catch (err: any) {
+            if (err.message?.includes('Yetersiz kredi')) {
+                setShowPaymentModal(true);
+            } else {
+                console.error('Save failed:', err);
+                setNotification({ message: 'İşlem başarısız: ' + err.message, type: 'error' });
             }
-        } else {
-            handleSaveToSystem();
         }
     };
 
@@ -988,16 +988,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         <Undo size={18} /> Geri Al
                     </button>
 
-                    <button onClick={handleLocalSave} style={{
+                    <button onClick={handleOneClickSave} style={{
                         height: '44px', padding: '0 1.25rem', background: 'rgba(30, 41, 59, 0.5)',
                         border: '1px solid rgba(255,255,255,0.1)', color: 'white',
                         borderRadius: '12px', cursor: 'pointer', fontSize: '0.85rem', display: 'flex',
                         alignItems: 'center', gap: '8px', whiteSpace: 'nowrap'
                     }}>
-                        <Save size={18} /> Kaydet
+                        <Save size={18} /> Hızlı Kayıt
                     </button>
 
-                    <button onClick={handleDownload} style={{
+                    <button onClick={handleOneClickSave} style={{
                         height: '44px', padding: '0 1.5rem', fontSize: '0.9rem',
                         display: 'flex', alignItems: 'center', gap: '10px', borderRadius: '12px',
                         background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
@@ -1006,7 +1006,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         cursor: 'pointer', fontWeight: '700', transition: 'all 0.2s'
                     }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
                         onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-                        <Download size={20} /> XSLT İndir
+                        <Download size={20} /> Kaydet ve İndir
                     </button>
                 </div>
 

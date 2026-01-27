@@ -253,6 +253,16 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                                     </div>
                                     <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                         <h3 style={{ fontSize: '1rem', fontWeight: 'bold', margin: '0 0 6px 0', color: 'white' }}>{template.name}</h3>
+
+                                        {/* Admin Metadata View */}
+                                        {isAdmin && showPending && (
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '8px', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px' }}>
+                                                <div><b>Belge:</b> {(template as any).docType || 'Genel'}</div>
+                                                <div><b>Kullanıcı:</b> {(template as any).username || 'Bilinmiyor'}</div>
+                                                <div><b>Tarih:</b> {new Date((template as any).createdAt).toLocaleString('tr-TR')}</div>
+                                            </div>
+                                        )}
+
                                         <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0 0 1rem 0', lineHeight: '1.4' }}>{template.description}</p>
                                         <button className="btn-primary" style={{ marginTop: 'auto', width: '100%', padding: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                             <Sparkles size={14} /> Şablonu Seç

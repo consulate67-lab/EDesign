@@ -1,8 +1,13 @@
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_URL = isLocal ? 'http://localhost:3002/api' : '/api';
 
-// Demo Mode state
-let demoCredits = 5;
+// Demo Mode state - persisted
+const getStoredCredits = () => parseInt(localStorage.getItem('demo_credits') || '5');
+const updateStoredCredits = (val: number) => {
+    localStorage.setItem('demo_credits', val.toString());
+    return val;
+};
+let demoCredits = getStoredCredits();
 
 export const api = {
     getToken: () => localStorage.getItem('token'),
@@ -35,12 +40,19 @@ export const api = {
         } catch (err) {
             console.warn('⚠️ API Connection failed. Falling back to Demo Mode.', err);
             // Mock data for Demo Mode
-            if (endpoint === '/me') return { full_name: 'Demo Kullanıcı', credits: demoCredits, company_name: 'Demo Ltd.' };
+            if (endpoint === '/me') {
+                const token = api.getToken();
+                if (token === 'admin-token') {
+                    return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarp@yilmaz.com', email: 'sarp@yilmaz.com' };
+                }
+                return { full_name: 'Demo Kullanıcı', credits: demoCredits, company_name: 'Demo Ltd.', username: 'demo_user' };
+            }
             if (endpoint === '/auth/login') return { token: 'demo-token' };
 
             if (endpoint.includes('/design/consume-credit')) {
                 if (demoCredits > 0) {
                     demoCredits--;
+                    updateStoredCredits(demoCredits);
                     return { success: true, credits: demoCredits };
                 } else {
                     throw new Error('Yetersiz kredi! Lütfen kredi yükleyin.');
@@ -50,6 +62,7 @@ export const api = {
             if (endpoint.includes('/payment/mock')) {
                 const amount = (options.body ? JSON.parse(options.body as string).amount : 100) || 100;
                 demoCredits += amount;
+                updateStoredCredits(demoCredits);
                 return { success: true, credits: demoCredits };
             }
 
@@ -60,7 +73,7 @@ export const api = {
     // Admin & Template Logic
     login: (username: string, password: string) => {
         // Super Admin Check
-        if (username === 'sarpyilmaz' && password === '07072017') {
+        if (username === 'sarp@yilmaz.com' && password === '07072017') {
             return Promise.resolve({ token: 'admin-token', role: 'admin', full_name: 'Sarp Yılmaz' });
         }
         return api.request('/auth/login', {
@@ -77,8 +90,9 @@ export const api = {
     getMe: async () => {
         const token = api.getToken();
         if (token === 'admin-token') {
-            return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarpyilmaz' };
+            return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarp@yilmaz.com', email: 'sarp@yilmaz.com' };
         }
+        // If not admin token but fallback to request, request will likely fail and fallback to demo user in catch block
         return api.request('/me');
     },
 
@@ -95,13 +109,16 @@ export const api = {
 
     // Template Management (Mock DB)
     saveTemplate: (template: any) => {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
+            const user = await api.getMe();
             const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
             const newTemp = {
                 ...template,
                 id: 'temp_' + Date.now(),
                 status: 'pending', // Pending approval
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                username: user.username || 'Anonymous',
+                docType: template.docType || 'Bilinmiyor'
             };
             temps.push(newTemp);
             localStorage.setItem('mock_templates', JSON.stringify(temps));
