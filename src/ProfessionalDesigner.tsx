@@ -2024,39 +2024,22 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     backgroundImage: 'linear-gradient(45deg, #f8fafc 25%, transparent 25%), linear-gradient(-45deg, #f8fafc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f8fafc 75%), linear-gradient(-45deg, transparent 75%, #f8fafc 75%)',
                                     backgroundSize: '20px 20px',
                                     backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-                                    cursor: placingMode ? 'crosshair' : (state.selectedId ? 'move' : 'default')
+                                    cursor: placingMode ? 'pointer' : (state.selectedId ? 'move' : 'default')
                                 }}
                                 onClick={(e) => {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
-                                    const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
-                                    const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
-                                    const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
+                                    // If placingMode is NOT active, we handle click-to-move here. 
+                                    // If placingMode IS active, the overlay (below) will handle it to ensure we capture clicks over iframe.
+                                    if (!placingMode && state.selectedId) {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
+                                        const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
+                                        const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
+                                        const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
 
-                                    if (placingMode) {
-                                        // Finalize adding element
-                                        const { type, content, shapeType, clonedElement } = placingMode;
-
-                                        if (clonedElement) {
-                                            const placedEl = { ...clonedElement, x: snapX, y: snapY };
-                                            setState(prev => ({ ...prev, elements: [...prev.elements, placedEl], selectedId: placedEl.id }));
-                                            setNotification({ message: 'Kopya yerleştirildi.', type: 'success' });
-                                            setPlacingMode(null);
-                                        } else if (type === 'shape' && shapeType) {
-                                            addElement('shape', shapeType, snapX, snapY);
-                                        } else {
-                                            addElement(type, content, snapX, snapY);
-                                        }
-                                        return;
-                                    }
-
-                                    if (state.selectedId) {
-                                        // Click-to-move functionality for existing selection
                                         setState(prev => ({
                                             ...prev,
                                             elements: prev.elements.map(el => {
                                                 if (el.id === state.selectedId) {
-                                                    // Center the element on the click
                                                     const width = parseInt(el.style?.width as string) || 100;
                                                     const height = parseInt(el.style?.height as string) || 30;
                                                     return { ...el, x: snapX - (width / 2), y: snapY - (height / 2) };
@@ -2067,6 +2050,36 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     }
                                 }}
                             >
+                                {/* Overlay for Placing Mode to ensure clicks are captured over Iframe */}
+                                {placingMode && (
+                                    <div
+                                        style={{
+                                            position: 'absolute', inset: 0, zIndex: 100, cursor: 'pointer', // Hand cursor
+                                            background: 'rgba(99, 102, 241, 0.1)' // Slight tint to indicate active mode
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
+                                            const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
+                                            const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
+                                            const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
+
+                                            const { type, content, shapeType, clonedElement } = placingMode;
+
+                                            if (clonedElement) {
+                                                const placedEl = { ...clonedElement, x: snapX, y: snapY };
+                                                setState(prev => ({ ...prev, elements: [...prev.elements, placedEl], selectedId: placedEl.id }));
+                                                setNotification({ message: 'Kopya yerleştirildi.', type: 'success' });
+                                            } else if (type === 'shape' && shapeType) {
+                                                addElement('shape', shapeType, snapX, snapY);
+                                            } else {
+                                                addElement(type, content, snapX, snapY);
+                                            }
+                                            setPlacingMode(null);
+                                        }}
+                                    />
+                                )}
                                 <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
                                     <iframe
                                         ref={iframeRef}
