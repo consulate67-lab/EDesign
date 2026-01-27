@@ -152,12 +152,26 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
       if (el.type === 'text') {
         let inner = el.content;
         if (el.binding) {
+          // Normalize XPath for UBL/Namespaced XMLs
+          // If no prefix (no colon) and looks like a path, use local-name() selector
+          const normalizeXPath = (path: string): string => {
+            if (path.includes(':') || path.startsWith('//') || path.startsWith('/') || !path.includes('/')) return path;
+
+            // Simple path A/B/C -> /*[local-name()='A']/*[local-name()='B']/*[local-name()='C']
+            // But we can't be sure about root. 
+            // Safer: *[local-name()='A']/*[local-name()='B']
+            // Or just assume the user provided path matches local names
+            return path.split('/').map(p => `*[local-name()='${p}']`).join('/');
+          };
+
+          const bindingPath = normalizeXPath(el.binding);
+
           if (el.format && (el.format === 'number' || el.format === 'currency' || el.format === 'percentage')) {
             const dec = el.decimals !== undefined ? el.decimals : 2;
             const zeros = '0'.repeat(dec);
             const pattern = `#.##0,${zeros}`;
 
-            let valExpr = `format-number(${el.binding}, '${pattern}', 'tr')`;
+            let valExpr = `format-number(${bindingPath}, '${pattern}', 'tr')`;
 
             if (el.format === 'currency') {
               inner = `₺ ${`<${xslPrefix}:value-of select="${valExpr}"/>`}`;
@@ -167,7 +181,7 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
               inner = `<${xslPrefix}:value-of select="${valExpr}"/>`;
             }
           } else {
-            inner = `<${xslPrefix}:value-of select="${el.binding}"/>`;
+            inner = `<${xslPrefix}:value-of select="${bindingPath}"/>`;
           }
         }
         content = `<span style="display:inline-block; word-break:break-word; width:100%; ${styleToCssForNew(el.style, true)}">${inner}</span>`;
