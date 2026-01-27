@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DndContext, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check, Facebook, Instagram, Twitter, Linkedin, Youtube } from 'lucide-react';
+import { ChevronLeft, Save, Type, Table as LucideTable, Sigma, Image as ImageIcon, Ruler, Layout, Settings, Upload, Move, ShieldCheck, X, Sparkles, Square, Circle, Minus, Plus, Undo, Copy, QrCode, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Box, Download, Check, Facebook, Instagram, Twitter, Linkedin, Youtube, ZoomIn, ZoomOut } from 'lucide-react';
 import { DraggableElement } from './DraggableElement.tsx';
 import { mergeDesignWithXslt } from './xsltMerger.ts';
 import { transformXmlWithXslt } from './xsltTransformer.ts';
@@ -42,6 +42,10 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     // New state for "Add Field" modal
     const [showFieldModal, setShowFieldModal] = useState(false);
     const [allXmlFields, setAllXmlFields] = useState<{ path: string, name: string, value: string, isNumeric: boolean }[]>([]);
+
+    // Zoom States
+    const [designZoom, setDesignZoom] = useState(0.65); // Default zoom for Design Canvas
+    const [previewZoom, setPreviewZoom] = useState(0.7); // Default zoom for Live Preview
 
 
     const saveHistory = () => {
@@ -2155,7 +2159,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                 style={{
                                     width: '210mm', minHeight: '297mm', background: 'white', margin: '0 auto', position: 'relative',
                                     boxShadow: '0 0 20px rgba(0,0,0,0.5)', overflow: 'hidden',
-                                    transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top center',
+                                    transform: `scale(${designZoom})`, transformOrigin: 'top center',
                                     backgroundImage: 'linear-gradient(45deg, #f8fafc 25%, transparent 25%), linear-gradient(-45deg, #f8fafc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f8fafc 75%), linear-gradient(-45deg, transparent 75%, #f8fafc 75%)',
                                     backgroundSize: '20px 20px',
                                     backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
@@ -2351,11 +2355,77 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                 </div>
                             </div>
                         </DndContext>
+
+                        {/* Design Canvas Zoom Controls */}
+                        <div style={{
+                            position: 'absolute', bottom: '20px', left: '20px',
+                            background: '#1e293b', padding: '6px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            zIndex: 100
+                        }}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setDesignZoom(z => Math.max(0.2, z - 0.1)); }}
+                                style={{
+                                    background: '#334155', border: 'none', color: 'white',
+                                    width: '28px', height: '28px', borderRadius: '4px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                            >
+                                <Minus size={16} />
+                            </button>
+                            <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '36px', textAlign: 'center', userSelect: 'none' }}>
+                                {Math.round(designZoom * 100)}%
+                            </span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setDesignZoom(z => Math.min(2.0, z + 0.1)); }}
+                                style={{
+                                    background: '#334155', border: 'none', color: 'white',
+                                    width: '28px', height: '28px', borderRadius: '4px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
                     </div>
 
-                    <div style={{ flex: 1, overflow: 'auto', background: '#f1f5f9', padding: '1rem' }}>
-                        <div style={{ margin: '0 auto', width: '210mm', minHeight: '297mm', background: 'white', boxShadow: '0 0 10px rgba(0,0,0,0.1)', transform: 'scale(0.7)', transformOrigin: 'top center' }}>
+                    <div style={{ flex: 1, overflow: 'auto', background: '#f1f5f9', padding: '1rem', position: 'relative' }}>
+                        <div style={{ margin: '0 auto', width: '210mm', minHeight: '297mm', background: 'white', boxShadow: '0 0 10px rgba(0,0,0,0.1)', transform: `scale(${previewZoom})`, transformOrigin: 'top center' }}>
                             <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none', minHeight: '297mm' }} title="Live Preview" />
+                        </div>
+
+                        {/* Live Preview Zoom Controls */}
+                        <div style={{
+                            position: 'absolute', bottom: '20px', right: '20px',
+                            background: '#1e293b', padding: '6px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            zIndex: 100
+                        }}>
+                            <button
+                                onClick={() => setPreviewZoom(z => Math.max(0.2, z - 0.1))}
+                                style={{
+                                    background: '#334155', border: 'none', color: 'white',
+                                    width: '28px', height: '28px', borderRadius: '4px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                            >
+                                <Minus size={16} />
+                            </button>
+                            <span style={{ color: 'white', fontSize: '0.8rem', minWidth: '36px', textAlign: 'center', userSelect: 'none' }}>
+                                {Math.round(previewZoom * 100)}%
+                            </span>
+                            <button
+                                onClick={() => setPreviewZoom(z => Math.min(2.0, z + 0.1))}
+                                style={{
+                                    background: '#334155', border: 'none', color: 'white',
+                                    width: '28px', height: '28px', borderRadius: '4px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                            >
+                                <Plus size={16} />
+                            </button>
                         </div>
                     </div>
                 </main>
