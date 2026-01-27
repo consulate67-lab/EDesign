@@ -153,15 +153,17 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
         let inner = el.content;
         if (el.binding) {
           // Normalize XPath for UBL/Namespaced XMLs
-          // If no prefix (no colon) and looks like a path, use local-name() selector
           const normalizeXPath = (path: string): string => {
-            if (path.includes(':') || path.startsWith('//') || path.startsWith('/') || !path.includes('/')) return path;
+            // If it's a complex absolute path or deep selector, leave it alone
+            if (path.startsWith('//') || path.startsWith('/')) return path;
 
-            // Simple path A/B/C -> /*[local-name()='A']/*[local-name()='B']/*[local-name()='C']
-            // But we can't be sure about root. 
-            // Safer: *[local-name()='A']/*[local-name()='B']
-            // Or just assume the user provided path matches local names
-            return path.split('/').map(p => `*[local-name()='${p}']`).join('/');
+            // Split by slash and handle each segment
+            return path.split('/').map(p => {
+              // If segment has prefix (e.g. cbc:ID), strip it
+              const localName = p.includes(':') ? p.split(':')[1] : p;
+              // Use local-name() check to be namespace agnostic
+              return `*[local-name()='${localName}']`;
+            }).join('/');
           };
 
           const bindingPath = normalizeXPath(el.binding);
