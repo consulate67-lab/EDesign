@@ -36,7 +36,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const [availableNumericFields, setAvailableNumericFields] = useState<{ path: string, name: string, value: string }[]>([]);
     const [history, setHistory] = useState<DesignState[]>([]);
     // New state for "Click-to-Place" functionality
-    const [placingMode, setPlacingMode] = useState<{ type: DesignElement['type'], content?: string, shapeType?: 'rect' | 'circle' | 'line' } | null>(null);
+    const [placingMode, setPlacingMode] = useState<{ type: DesignElement['type'], content?: string, shapeType?: 'rect' | 'circle' | 'line', clonedElement?: DesignElement } | null>(null);
 
 
     const saveHistory = () => {
@@ -353,11 +353,11 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             if (el) {
                 const newEl: DesignElement = {
                     ...JSON.parse(JSON.stringify(el)),
-                    id: Math.random().toString(36).substr(2, 9),
-                    x: el.x + 20,
-                    y: el.y + 20
+                    id: Math.random().toString(36).substr(2, 9)
                 };
-                setState(prev => ({ ...prev, elements: [...prev.elements, newEl], selectedId: newEl.id }));
+                // Instead of immediately adding, initiate placement
+                setPlacingMode({ type: newEl.type, clonedElement: newEl });
+                setNotification({ message: 'Kopyalanan nesneyi yerleştirmek için tıklayın...', type: 'success' });
             }
         } else if (state.selectedXsltElement) {
             const override = state.selectedXsltElement;
@@ -2035,8 +2035,14 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
 
                                     if (placingMode) {
                                         // Finalize adding element
-                                        const { type, content, shapeType } = placingMode;
-                                        if (type === 'shape' && shapeType) {
+                                        const { type, content, shapeType, clonedElement } = placingMode;
+
+                                        if (clonedElement) {
+                                            const placedEl = { ...clonedElement, x: snapX, y: snapY };
+                                            setState(prev => ({ ...prev, elements: [...prev.elements, placedEl], selectedId: placedEl.id }));
+                                            setNotification({ message: 'Kopya yerleştirildi.', type: 'success' });
+                                            setPlacingMode(null);
+                                        } else if (type === 'shape' && shapeType) {
                                             addElement('shape', shapeType, snapX, snapY);
                                         } else {
                                             addElement(type, content, snapX, snapY);
