@@ -704,11 +704,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0, paddingRight: '0.5rem' }}>
-                    {userInfo && (
-                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '8px 16px', borderRadius: '12px', fontSize: '0.85rem', color: userInfo.credits > 0 ? '#10b981' : '#f87171', border: '1px solid rgba(16, 185, 129, 0.2)', whiteSpace: 'nowrap', fontWeight: '600' }}>
-                            <span style={{ opacity: 0.7, marginRight: '4px' }}>Kredi:</span> <b>{userInfo.credits}</b>
-                        </div>
-                    )}
+
                 </div>
             </header>
 
@@ -722,16 +718,46 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     zIndex: 5,
                     boxShadow: '10px 0 30px rgba(0,0,0,0.2)'
                 }}>
+                    {/* User Profile & Credits Section */}
+                    <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.4) 0%, transparent 100%)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.9rem', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.3)' }}>
+                                <Settings size={18} />
+                            </div>
+                            <div>
+                                <div style={{ color: 'white', fontWeight: 'bold', fontSize: '0.85rem' }}>Hesap Yönetimi</div>
+                                <div style={{ color: '#94a3b8', fontSize: '0.65rem' }}>Tasarım Editörü</div>
+                            </div>
+                        </div>
+                        {userInfo && (
+                            <div
+                                onClick={() => setShowPaymentModal(true)}
+                                style={{
+                                    background: 'rgba(16, 185, 129, 0.1)', padding: '8px 12px', borderRadius: '8px',
+                                    border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <ShieldCheck size={14} color="#10b981" />
+                                    <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: '600' }}>Kredi</span>
+                                </div>
+                                <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.85rem' }}>{userInfo.credits}</span>
+                            </div>
+                        )}
+                    </div>
                     <div style={{ padding: '1.5rem', background: 'rgba(30, 41, 59, 0.3)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                         <label style={{ fontSize: '0.6rem', color: '#6366f1', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
                             <Box size={14} /> NESNE KÜTÜPHANESİ
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '1.5rem' }}>
                             {[
-                                { id: 'text', icon: <Type size={20} />, label: 'Metin', action: () => addElement('text') },
-                                { id: 'table', icon: <LucideTable size={20} />, label: 'Tablo', action: () => addElement('table') },
-                                { id: 'formula', icon: <Sigma size={20} />, label: 'Formül', action: () => addElement('formula') },
-                                { id: 'qrcode', icon: <QrCode size={20} />, label: 'QR', action: () => addElement('qrcode') },
+                                { id: 'text', icon: <Type size={20} />, label: 'Metin', action: () => initiateAddElement('text', 'Yeni Metin') },
+                                { id: 'table', icon: <LucideTable size={20} />, label: 'Tablo', action: () => initiateAddElement('table') },
+                                { id: 'formula', icon: <Sigma size={20} />, label: 'Formül', action: () => initiateAddElement('formula', 'Fiyat * Adet') },
+                                { id: 'qrcode', icon: <QrCode size={20} />, label: 'QR', action: () => initiateAddElement('qrcode', 'QR-CODE') },
                                 { id: 'image', icon: <ImageIcon size={20} />, label: 'Resim', action: () => fileInputRef.current?.click() }
                             ].map((item) => (
                                 <button
