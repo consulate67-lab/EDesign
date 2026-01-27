@@ -84,6 +84,21 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
     // Re-using the logic from before for new elements construction
 
     // ... (logic for elementsXsl generation same as before) ...
+    // Detect XSLT Prefix
+    const xsltNs = 'http://www.w3.org/1999/XSL/Transform';
+    let xslPrefix = 'xsl';
+    // Helper to find prefix
+    if (doc.documentElement) {
+      // logic to finding prefix
+      const attrs = doc.documentElement.attributes;
+      for (let i = 0; i < attrs.length; i++) {
+        if (attrs[i].value === xsltNs && attrs[i].name.startsWith('xmlns:')) {
+          xslPrefix = attrs[i].name.substring(6);
+          break;
+        }
+      }
+    }
+
     const styleToCssForNew = (style?: React.CSSProperties, isInner: boolean = false): string => {
       if (!style) return '';
       const filteredStyle = isInner ? { ...style } : { ...style };
@@ -100,17 +115,20 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
     };
 
     // Inject Turkish decimal format helper if not present
-    if (!result.includes('xsl:decimal-format name="tr"')) {
-      const insertion = result.indexOf('>'); // End of stylesheet tag roughly
-      const stylesheetEnd = result.indexOf('>');
-      if (stylesheetEnd > -1) {
-        // Check if it's actually the xml declaration by checking content
-        // We'll safely insert it before the first xsl:template or xsl:output
-        const firstChild = result.search(/<xsl:(template|output|variable|param)/);
-        if (firstChild > -1) {
-          result = result.slice(0, firstChild) +
-            '<xsl:decimal-format name="tr" decimal-separator="," grouping-separator="." />\n' +
-            result.slice(firstChild);
+    // Uses the detected prefix
+    const decimalFormatTag = `<${xslPrefix}:decimal-format name="tr" decimal-separator="," grouping-separator="." />`;
+    if (result.indexOf(`:decimal-format name="tr"`) === -1) {
+      // Find where to insert using the detected prefix in regex or generic
+      // We look for :template, :output, etc. with any prefix potentially, but best to use our detected one if consistent
+      const regex = new RegExp(`<(${xslPrefix}|xsl|xslt):template|:output|:variable|:param`);
+      const match = result.match(regex);
+      if (match && match.index !== undefined) {
+        result = result.slice(0, match.index) + decimalFormatTag + '\n' + result.slice(match.index);
+      } else {
+        // Fallback: insert after root element start
+        const rootEnd = result.indexOf('>');
+        if (rootEnd > -1) {
+          result = result.slice(0, rootEnd + 1) + '\n' + decimalFormatTag + '\n' + result.slice(rootEnd + 1);
         }
       }
     }
@@ -137,19 +155,19 @@ export const mergeDesignWithXslt = (originalXslt: string, state: DesignState): s
             let valExpr = `format-number(${el.binding}, '${pattern}', 'tr')`;
 
             if (el.format === 'currency') {
-              inner = `₺ ${`<xsl:value-of select="${valExpr}"/>`}`;
+              inner = `₺ ${`<${xslPrefix}:value-of select="${valExpr}"/>`}`;
             } else if (el.format === 'percentage') {
-              inner = `%${`<xsl:value-of select="${valExpr}"/>`}`;
+              inner = `%${`<${xslPrefix}:value-of select="${valExpr}"/>`}`;
             } else {
-              inner = `<xsl:value-of select="${valExpr}"/>`;
+              inner = `<${xslPrefix}:value-of select="${valExpr}"/>`;
             }
           } else {
-            inner = `<xsl:value-of select="${el.binding}"/>`;
+            inner = `<${xslPrefix}:value-of select="${el.binding}"/>`;
           }
         }
         content = `<span style="display:inline-block; word-break:break-word; width:100%; ${styleToCssForNew(el.style, true)}">${inner}</span>`;
       } else if (el.type === 'formula') {
-        content = `<strong style="${styleToCssForNew(el.style, true)}"><xsl:value-of select="${el.content}"/></strong>`;
+        content = `<strong style="${styleToCssForNew(el.style, true)}"><${xslPrefix}:value-of select="${el.content}"/></strong>`;
       } else if (el.type === 'image') {
         content = `<img src="${el.content}" style="width:100%; height:100%; object-fit:contain; ${styleToCssForNew(el.style, true)}" />`;
       } else if (el.type === 'shape') {
