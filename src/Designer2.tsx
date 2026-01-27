@@ -21,6 +21,7 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
         companyName: 'Örnek Firma A.Ş.',
         logoUrl: '',
         selectedId: null,
+        selectedIds: [],
         selectedXsltElement: null,
     });
     const [backgroundHtml, setBackgroundHtml] = useState('');

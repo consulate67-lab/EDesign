@@ -217,19 +217,45 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             let xmlText = xmlCache.current;
             if (!xmlText) {
                 const xmlFile = getXmlFile(moduleId);
-                console.log('🔄 Loading XML file:', xmlFile);
-                const xmlRes = await fetch(`./examples/${xmlFile}`);
+                const xmlFile = getXmlFile(moduleId);
+                // Robust Fetch Strategy
+                const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+                const pathsToTry = [
+                    `${baseUrl}examples/${xmlFile}`,
+                    `/examples/${xmlFile}`,
+                    `./examples/${xmlFile}`
+                ];
 
-                if (!xmlRes.ok) {
-                    console.error('❌ XML fetch failed:', xmlRes.status, xmlRes.statusText);
+                let loadedText: string | null = null;
+                console.log(`🔄 Trying to load XML: ${xmlFile}`);
+
+                for (const url of pathsToTry) {
+                    try {
+                        console.log(`   Trying path: ${url}`);
+                        const tryRes = await fetch(url);
+                        if (tryRes.ok) {
+                            const text = await tryRes.text();
+                            if (!text.trim().startsWith('<!DOCTYPE html') && !text.trim().startsWith('<html')) {
+                                loadedText = text;
+                                console.log(`   ✅ Success from: ${url}`);
+                                break;
+                            } else {
+                                console.warn(`   ⚠️ HTML response from: ${url}`);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`   ❌ Fetch error for ${url}:`, e);
+                    }
+                }
+
+                if (!loadedText) {
+                    const msg = `XML Verisi Yüklenemedi! (${xmlFile})\nLütfen internet bağlantınızı kontrol edin veya yönetici ile iletişime geçin.`;
+                    setLoadError(msg);
+                    console.error('❌ All XML fetch attempts failed.');
                     return;
                 }
-                xmlText = await xmlRes.text();
-                if (xmlText.trim().startsWith('<!DOCTYPE html') || xmlText.trim().startsWith('<html')) {
-                    console.error('❌ XML file invalid (HTML returned):', xmlFile);
-                    // Fallback to empty XML to prevent crash, or notify
-                    return;
-                }
+
+                xmlText = loadedText;
                 xmlCache.current = xmlText;
 
                 // Extract numeric fields once XML is loaded

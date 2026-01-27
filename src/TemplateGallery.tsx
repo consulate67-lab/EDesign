@@ -139,12 +139,14 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                         {/* Filters & Search */}
                         {/* Filters & Search */}
                         <div style={{
-                            padding: '1.5rem 2rem',
-                            background: 'rgba(15, 23, 42, 0.2)',
+                            padding: '1.5rem',
+                            background: 'rgba(15, 23, 42, 0.4)',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '1.5rem',
-                            borderBottom: '1px solid rgba(255,255,255,0.05)'
+                            gap: '1rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.1)',
+                            position: 'relative',
+                            zIndex: 20
                         }}>
                             {/* User/Admin Role & Mode Switches */}
                             {isAdmin && (
