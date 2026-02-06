@@ -10,6 +10,14 @@ export interface XSLTTemplate {
 
 export const xsltTemplates: XSLTTemplate[] = [
     {
+        id: 'blank-design',
+        name: 'Boş Tasarım',
+        description: 'Tamamen boş bir sayfa ile sıfırdan kendi tasarımınızı oluşturun.',
+        category: 'Genel',
+        fileName: 'Blank_Design.xslt',
+        previewColor: '#94a3b8'
+    },
+    {
         id: 'gib-standard',
         name: 'GİB Standart',
         description: 'Gelir İdaresi Başkanlığı resmi formatı. Resmi ve sade görünüm.',

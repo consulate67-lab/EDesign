@@ -24,12 +24,14 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
     const [selectedTemplate, setSelectedTemplate] = useState<XSLTTemplate | null>(null);
     const [dynamicTemplates, setDynamicTemplates] = useState<any[]>([]);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
     const [showPending, setShowPending] = useState(false); // Admin Toggle
 
     React.useEffect(() => {
         if (isOpen) {
             // Check Role
             api.getMe().then(user => {
+                setCurrentUser(user);
                 if (user && user.role === 'admin') {
                     setIsAdmin(true);
                 }
@@ -78,7 +80,18 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
 
     if (!isOpen) return null;
 
-    const allTemplates = showPending ? dynamicTemplates : [...xsltTemplates, ...dynamicTemplates];
+    // Safety check for dynamicTemplates to prevent crash
+    const safeDynamicTemplates = Array.isArray(dynamicTemplates) ? dynamicTemplates : [];
+
+    const allTemplates = showPending ? safeDynamicTemplates : [...xsltTemplates, ...safeDynamicTemplates];
+    console.log('🖼️ Template Gallery:', {
+        static: xsltTemplates.length,
+        dynamic: safeDynamicTemplates.length,
+        total: allTemplates.length,
+        isAdmin,
+        showPending
+    });
+
     // Consolidate categories
     const categories = ['Hepsi', ...new Set(allTemplates.map(t => t.category))];
 
@@ -278,10 +291,10 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                                             <Sparkles size={14} /> Şablonu Seç
                                         </button>
 
-                                        {/* Admin Actions */}
-                                        {isAdmin && (
+                                        {/* Actions: Admin can approve/delete. Owner can delete. */}
+                                        {(isAdmin || (currentUser && currentUser.username === (template as any).username)) && (
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                                                {showPending && (
+                                                {isAdmin && showPending && (
                                                     <button
                                                         onClick={(e) => handleApprove(e, template.id)}
                                                         className="btn-success"
@@ -300,9 +313,11 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ isOpen, onClos
                                                         padding: '6px', fontSize: '0.75rem',
                                                         background: 'rgba(239, 68, 68, 0.2)', color: '#f87171',
                                                         border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px',
-                                                        cursor: 'pointer'
+                                                        cursor: 'pointer',
+                                                        flex: isAdmin && showPending ? '0 0 auto' : '1', // Expand if it's the only button
+                                                        display: 'flex', justifyContent: 'center', alignItems: 'center'
                                                     }} title="Sil / Reddet">
-                                                    <Trash2 size={14} />
+                                                    <Trash2 size={14} /> {(!isAdmin || !showPending) && <span style={{ marginLeft: '6px' }}>Sil</span>}
                                                 </button>
                                             </div>
                                         )}

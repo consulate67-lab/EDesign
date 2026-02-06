@@ -42,6 +42,7 @@ export interface XsltElementOverride {
   rowCount?: number;
   colCount?: number;
   shapeType?: 'rect' | 'circle' | 'line'; // NEW: Recognition for shapes in XSLT
+  hierarchy?: { id: string; tag: string; className?: string }[]; // NEW: Parent hierarchy
 }
 
 export interface DesignState {

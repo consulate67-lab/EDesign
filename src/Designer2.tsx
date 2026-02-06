@@ -93,13 +93,19 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
         setSelectedDbField(null);
     };
 
+    const DESIGN_SCALE = 0.8;
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, delta } = event;
         if (active) {
             setState(prev => ({
                 ...prev,
                 elements: prev.elements.map(el =>
-                    el.id === active.id ? { ...el, x: el.x + delta.x, y: el.y + delta.y } : el
+                    el.id === active.id ? {
+                        ...el,
+                        x: el.x + (delta.x / DESIGN_SCALE),
+                        y: el.y + (delta.y / DESIGN_SCALE)
+                    } : el
                 )
             }));
         }
@@ -129,11 +135,17 @@ export const Designer2: React.FC<Designer2Props> = ({ template, docName, onBack 
                 <div style={{ flex: '1 1 40%', background: '#020617', overflow: 'auto', padding: '1rem', position: 'relative' }}>
                     <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.75rem', marginBottom: '0.5rem' }}>TASARIM ALANI (DÜZENLEME)</div>
                     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-                        <div style={{ width: '210mm', height: '297mm', background: 'white', position: 'relative', scale: '0.8', transformOrigin: 'top center' }}>
+                        <div style={{ width: '210mm', height: '297mm', background: 'white', position: 'relative', scale: `${DESIGN_SCALE}`, transformOrigin: 'top center' }}>
                             <iframe srcDoc={backgroundHtml} style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', zIndex: 0 }} title="Backdrop" />
                             <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
                                 {state.elements.map(el => (
-                                    <DraggableElement key={el.id} element={el} isSelected={state.selectedId === el.id} onClick={() => { setState(prev => ({ ...prev, selectedId: el.id })); setSelectedDbField(null); }}>
+                                    <DraggableElement
+                                        key={el.id}
+                                        element={el}
+                                        scale={DESIGN_SCALE}
+                                        isSelected={state.selectedId === el.id}
+                                        onClick={() => { setState(prev => ({ ...prev, selectedId: el.id })); setSelectedDbField(null); }}
+                                    >
                                         <div style={{ fontSize: '12px', border: '1px dashed #6366f1', padding: '2px', background: 'rgba(99,102,241,0.1)' }}>{el.content || el.type}</div>
                                     </DraggableElement>
                                 ))}

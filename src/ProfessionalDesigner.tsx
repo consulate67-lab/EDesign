@@ -300,7 +300,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         if (originalXslt) {
             refreshPreview(originalXslt, state);
         }
-    }, [state, originalXslt]);
+    }, [originalXslt, state.xsltOverrides, state.companyName, state.logoUrl, state.themeColor]);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -309,7 +309,10 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
             } else if (event.data?.type === 'XSLT_ELEMENT_CLICKED') {
                 console.log('🖱️ XSLT Element Clicked:', event.data);
                 // User clicked on an existing XSLT element (logo, table, db field)
-                const { elementId, elementType, shapeType, path, currentStyles, rect, innerText, isDynamic, tableData, rowCount, colCount } = event.data;
+                const { elementId, elementType, shapeType, hierarchy, path, currentStyles, rect, innerText, isDynamic, tableData, rowCount, colCount, relativeX, relativeY } = event.data;
+
+                const startX = relativeX !== undefined ? relativeX : (rect?.x || 0);
+                const startY = relativeY !== undefined ? relativeY : (rect?.y || 0);
 
                 // Find existing override or create new one
                 const existingOverride = state.xsltOverrides.find(o => o.elementId === elementId);
@@ -318,14 +321,15 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     elementId,
                     elementType: elementType as any, // Cast to any to accept 'tr', 'td' etc.
                     shapeType, // NEW
+                    hierarchy, // NEW
                     path: (elementType === 'table' || elementType === 'tr') ? `[${elementType.toUpperCase()} YAPISI]` : path,
                     content: innerText,
                     isDynamic,
                     tableData,
                     rowCount,
                     colCount,
-                    x: rect?.x || 0,
-                    y: rect?.y || 0,
+                    x: startX,
+                    y: startY,
                     width: rect?.width,
                     height: rect?.height,
                     styleOverrides: {
@@ -335,12 +339,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         fontWeight: currentStyles.fontWeight,
                         fontStyle: currentStyles.fontStyle,
                         fontFamily: currentStyles.fontFamily,
-                        position: 'absolute' as any,
-                        left: `${rect?.x || 0}px`,
-                        top: `${rect?.y || 0}px`,
                         width: `${rect?.width}px`,
                         border: currentStyles.border,
-                        borderRadius: currentStyles.borderRadius
+                        borderRadius: currentStyles.borderRadius,
+                        ...((elementType === 'td' || elementType === 'th' || elementType === 'tr') ? {
+                            position: 'static' as any
+                        } : {
+                            position: 'absolute' as any,
+                            left: `${startX}px`,
+                            top: `${startY}px`
+                        })
                     }
                 };
 
@@ -482,10 +490,16 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const handleDragMove = (event: DragEndEvent) => {
         const { active, delta } = event;
         // Check if it is an XSLT element (starts with table-, img-, etc and has overrides)
-        const override = state.xsltOverrides.find(o => o.elementId === active.id);
+        let override = state.xsltOverrides.find(o => o.elementId === active.id);
+
+        // Fallback to selected element if not in overrides yet
+        if (!override && state.selectedXsltElement && state.selectedXsltElement.elementId === active.id) {
+            override = state.selectedXsltElement;
+        }
+
         if (override) {
-            const newX = (override.x || 0) + (delta.x / PREVIEW_SCALE);
-            const newY = (override.y || 0) + (delta.y / PREVIEW_SCALE);
+            const newX = (override.x || 0) + (delta.x / designZoom);
+            const newY = (override.y || 0) + (delta.y / designZoom);
 
             // Live update via postMessage
             if (iframeRef.current?.contentWindow) {
@@ -505,16 +519,20 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, delta } = event;
         if (active) {
-            const dx = delta.x / PREVIEW_SCALE;
-            const dy = delta.y / PREVIEW_SCALE;
+            const dx = delta.x / designZoom;
+            const dy = delta.y / designZoom;
 
             // Check if it is an XSLT element
             const overrideIndex = state.xsltOverrides.findIndex(o => o.elementId === active.id);
-            if (overrideIndex >= 0) {
+            const isXsltElement = overrideIndex >= 0 || (state.selectedXsltElement && state.selectedXsltElement.elementId === active.id);
+
+            if (isXsltElement) {
                 saveHistory();
                 setState(prev => {
                     const overrides = [...prev.xsltOverrides];
-                    const current = overrides[overrideIndex];
+                    // Get current state from override list OR selected element
+                    const current = overrideIndex >= 0 ? overrides[overrideIndex] : prev.selectedXsltElement!;
+
                     let newX = (current.x || 0) + dx;
                     let newY = (current.y || 0) + dy;
 
@@ -522,7 +540,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                     newX = Math.round(newX / SNAP_SIZE) * SNAP_SIZE;
                     newY = Math.round(newY / SNAP_SIZE) * SNAP_SIZE;
 
-                    overrides[overrideIndex] = {
+                    const updated = {
                         ...current,
                         x: newX,
                         y: newY,
@@ -534,7 +552,17 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         }
                     };
 
-                    return { ...prev, xsltOverrides: overrides };
+                    // Update or Add to overrides
+                    if (overrideIndex >= 0) {
+                        overrides[overrideIndex] = updated;
+                    } else {
+                        overrides.push(updated);
+                    }
+
+                    // Also update selectedXsltElement if it matches
+                    const newSelected = (prev.selectedXsltElement && prev.selectedXsltElement.elementId === active.id) ? updated : prev.selectedXsltElement;
+
+                    return { ...prev, xsltOverrides: overrides, selectedXsltElement: newSelected };
                 });
             } else {
                 saveHistory();
@@ -599,6 +627,55 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [state.selectedId, state.selectedXsltElement, state.xsltOverrides]);
+
+    const handleResize = (id: string, w: number, h: number, x?: number, y?: number) => {
+        // saveHistory(); // Removed for performance, called via onResizeStart
+
+        // Update user elements
+        setState(prev => ({
+            ...prev,
+            elements: prev.elements.map(el => el.id === id ? {
+                ...el,
+                x: x !== undefined ? x : el.x,
+                y: y !== undefined ? y : el.y,
+                style: { ...el.style, width: `${w}px`, height: `${h}px` },
+                // If it is a table we might need to adjust colWidths proportionally, but for now just container
+            } : el)
+        }));
+
+        // Update XSLT elements if selected
+        if (state.selectedXsltElement?.elementId === id) {
+            setState(prev => {
+                const updated = {
+                    ...prev.selectedXsltElement!,
+                    width: w,
+                    height: h,
+                    x: x !== undefined ? x : (prev.selectedXsltElement!.x || 0),
+                    y: y !== undefined ? y : (prev.selectedXsltElement!.y || 0),
+                    styleOverrides: {
+                        ...prev.selectedXsltElement!.styleOverrides,
+                        width: `${w}px`,
+                        height: `${h}px`,
+                        left: x !== undefined ? `${x}px` : prev.selectedXsltElement!.styleOverrides.left,
+                        top: y !== undefined ? `${y}px` : prev.selectedXsltElement!.styleOverrides.top
+                    }
+                };
+                const newOverrides = prev.xsltOverrides.map(o => o.elementId === id ? updated : o);
+                if (!prev.xsltOverrides.find(o => o.elementId === id)) newOverrides.push(updated);
+
+                // Update iframe
+                if (iframeRef.current?.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage({
+                        type: 'UPDATE_ELEMENT_STYLE',
+                        elementId: id,
+                        style: updated.styleOverrides
+                    }, '*');
+                }
+
+                return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+            });
+        }
+    };
 
     const selectedElement = state.elements.find(e => e.id === state.selectedId);
 
@@ -1514,6 +1591,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                 className="input-field"
                                                 style={{ background: '#020617', border: '2px solid #6366f188', color: 'white', width: '100%', padding: '6px', borderRadius: '4px' }}
                                                 value={parseInt(selectedElement.style?.width as string) || 0}
+                                                onMouseDown={() => saveHistory()}
                                                 onChange={(e) => {
                                                     const val = e.target.value ? `${e.target.value}px` : undefined;
                                                     setState(prev => ({
@@ -1530,6 +1608,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                 className="input-field"
                                                 style={{ background: '#020617', border: '2px solid #6366f188', color: 'white', width: '100%', padding: '6px', borderRadius: '4px' }}
                                                 value={parseInt(selectedElement.style?.height as string) || 0}
+                                                onMouseDown={() => saveHistory()}
                                                 onChange={(e) => {
                                                     const val = e.target.value ? `${e.target.value}px` : undefined;
                                                     setState(prev => ({
@@ -1544,19 +1623,96 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
                                         <div className="form-group">
                                             <label style={{ fontSize: '0.65rem', color: '#64748b' }}>Sol Uzaklık (X)</label>
-                                            <input type="number" className="input-field" style={{ background: '#020617', border: '1px solid #334155', color: 'white', width: '100%', padding: '4px' }} value={Math.round(selectedElement.x)} onChange={(e) => {
+                                            <input type="number" className="input-field" style={{ background: '#020617', border: '1px solid #334155', color: 'white', width: '100%', padding: '4px' }} value={Math.round(selectedElement.x)} onMouseDown={() => saveHistory()} onChange={(e) => {
                                                 const val = parseInt(e.target.value) || 0;
                                                 setState(prev => ({ ...prev, elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, x: val } : el) }));
                                             }} />
                                         </div>
                                         <div className="form-group">
                                             <label style={{ fontSize: '0.65rem', color: '#64748b' }}>Üst Uzaklık (Y)</label>
-                                            <input type="number" className="input-field" style={{ background: '#020617', border: '1px solid #334155', color: 'white', width: '100%', padding: '4px' }} value={Math.round(selectedElement.y)} onChange={(e) => {
+                                            <input type="number" className="input-field" style={{ background: '#020617', border: '1px solid #334155', color: 'white', width: '100%', padding: '4px' }} value={Math.round(selectedElement.y)} onMouseDown={() => saveHistory()} onChange={(e) => {
                                                 const val = parseInt(e.target.value) || 0;
                                                 setState(prev => ({ ...prev, elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, y: val } : el) }));
                                             }} />
                                         </div>
                                     </div>
+
+                                    {selectedElement.type === 'image' && (
+                                        <div className="form-group" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+                                            <label style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Sığdırma Modu</label>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                {[
+                                                    { mode: 'contain', label: 'Sığdır', desc: 'Resmi orantılı şekilde kutuya sığdırır' },
+                                                    { mode: 'cover', label: 'Doldur', desc: 'Kutuyu tamamen doldurur (Zoom/Kırpma)' },
+                                                    { mode: 'fill', label: 'Uzat', desc: 'Resmi kutuya yayar (Deforme)' }
+                                                ].map(opt => (
+                                                    <button
+                                                        key={opt.mode}
+                                                        title={opt.desc}
+                                                        onClick={() => {
+                                                            saveHistory();
+                                                            setState(prev => ({
+                                                                ...prev,
+                                                                elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, style: { ...el.style, objectFit: opt.mode as any } } : el)
+                                                            }));
+                                                        }}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '6px 2px',
+                                                            fontSize: '0.65rem',
+                                                            background: (selectedElement.style?.objectFit || 'contain') === opt.mode ? '#6366f1' : '#1e293b',
+                                                            color: 'white',
+                                                            border: '1px solid #334155',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <div style={{ marginTop: '8px' }}>
+                                                <label style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Pozisyon</label>
+                                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'space-between' }}>
+                                                    {[
+                                                        { pos: 'left center', icon: <AlignLeft size={14} />, label: 'Sol' },
+                                                        { pos: 'center center', icon: <AlignCenter size={14} />, label: 'Orta' },
+                                                        { pos: 'right center', icon: <AlignRight size={14} />, label: 'Sağ' },
+                                                        { pos: 'top center', icon: <ArrowUpToLine size={14} />, label: 'Üst' },
+                                                        { pos: 'bottom center', icon: <ArrowDownToLine size={14} />, label: 'Alt' }
+                                                    ].map(p => (
+                                                        <button
+                                                            key={p.pos}
+                                                            title={p.label}
+                                                            onClick={() => {
+                                                                saveHistory();
+                                                                setState(prev => ({
+                                                                    ...prev,
+                                                                    elements: prev.elements.map(el => el.id === state.selectedId ? { ...el, style: { ...el.style, objectPosition: p.pos } } : el)
+                                                                }));
+                                                            }}
+                                                            style={{
+                                                                padding: '6px',
+                                                                background: (selectedElement.style?.objectPosition || 'center center') === p.pos ? '#6366f1' : '#1e293b',
+                                                                color: 'white',
+                                                                border: '1px solid #334155',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flex: 1
+                                                            }}
+                                                        >
+                                                            {p.icon}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {selectedElement.type !== 'image' && (
                                         <>
@@ -1568,6 +1724,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                         className="input-field"
                                                         style={{ background: '#020617', border: '1px solid #334155', color: 'white', width: '100%', padding: '6px' }}
                                                         value={parseInt(selectedElement.style?.fontSize as string) || 12}
+                                                        onMouseDown={() => saveHistory()}
                                                         onChange={(e) => {
                                                             const fontSize = `${e.target.value}px`;
                                                             setState(prev => ({
@@ -1847,6 +2004,40 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                             </div>
                         ) : state.selectedXsltElement ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                {/* Hierarchy Navigation */}
+                                {state.selectedXsltElement.hierarchy && state.selectedXsltElement.hierarchy.length > 0 && (
+                                    <div className="property-section" style={{ borderColor: '#64748b', marginBottom: '4px' }}>
+                                        <div className="property-section-header" style={{ padding: '0.4rem 0.8rem', fontSize: '0.6rem', color: '#94a3b8' }}>
+                                            KATMAN HİYERARŞİSİ
+                                        </div>
+                                        <div className="property-section-body" style={{ padding: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                            {state.selectedXsltElement.hierarchy.slice().reverse().map((h, i) => (
+                                                <div key={h.id} style={{ display: 'flex', alignItems: 'center' }}>
+                                                    {i > 0 && <span style={{ marginRight: '4px', color: '#475569' }}>/</span>}
+                                                    <button
+                                                        onClick={() => {
+                                                            if (iframeRef.current?.contentWindow) {
+                                                                iframeRef.current.contentWindow.postMessage({ type: 'SELECT_ELEMENT', elementId: h.id }, '*');
+                                                            }
+                                                        }}
+                                                        title={`ID: ${h.id}`}
+                                                        style={{
+                                                            background: h.id === state.selectedXsltElement?.elementId ? '#3b82f6' : 'transparent',
+                                                            color: h.id === state.selectedXsltElement?.elementId ? 'white' : '#94a3b8',
+                                                            border: '1px solid #334155',
+                                                            borderRadius: '3px',
+                                                            padding: '2px 6px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.65rem'
+                                                        }}
+                                                    >
+                                                        {h.tag.toUpperCase()}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Header Section */}
                                 <div className="property-section" style={{ borderColor: isTableElement(state.selectedXsltElement.elementType) ? '#6366f1' : '#10b981', background: isTableElement(state.selectedXsltElement.elementType) ? '#6366f111' : '#10b98111' }}>
                                     <div className="property-section-header" style={{ background: isTableElement(state.selectedXsltElement.elementType) ? '#6366f122' : '#10b98122', color: isTableElement(state.selectedXsltElement.elementType) ? '#818cf8' : '#34d399' }}>
@@ -1926,6 +2117,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                     style={{ background: '#020617', border: '1px solid #10b98144', color: 'white', width: '100%', padding: '6px', minHeight: '60px', borderRadius: '4px', fontSize: '0.75rem' }}
                                                     value={state.selectedXsltElement.content || ''}
                                                     onKeyDown={(e) => e.stopPropagation()}
+                                                    onFocus={() => saveHistory()}
                                                     onChange={(e) => {
                                                         const newContent = e.target.value;
                                                         setState(prev => {
@@ -2098,6 +2290,109 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     </div>
                                 )}
 
+                                {(state.selectedXsltElement.elementType === 'image' || state.selectedXsltElement.elementType === 'img') && (
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Sığdırma Modu</label>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            {[
+                                                { mode: 'contain', label: 'Sığdır', desc: 'Resmi orantılı şekilde kutuya sığdırır' },
+                                                { mode: 'cover', label: 'Doldur', desc: 'Kutuyu tamamen doldurur (Zoom/Kırpma)' },
+                                                { mode: 'fill', label: 'Uzat', desc: 'Resmi kutuya yayar (Deforme)' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.mode}
+                                                    title={opt.desc}
+                                                    onClick={() => {
+                                                        saveHistory();
+                                                        setState(prev => {
+                                                            const updated = {
+                                                                ...prev.selectedXsltElement!,
+                                                                styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, objectFit: opt.mode as any }
+                                                            };
+                                                            const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                            if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+
+                                                            if (iframeRef.current?.contentWindow) {
+                                                                iframeRef.current.contentWindow.postMessage({
+                                                                    type: 'UPDATE_ELEMENT_STYLE',
+                                                                    elementId: updated.elementId,
+                                                                    style: updated.styleOverrides
+                                                                }, '*');
+                                                            }
+                                                            return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                        });
+                                                    }}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 2px',
+                                                        fontSize: '0.65rem',
+                                                        background: (state.selectedXsltElement?.styleOverrides.objectFit || 'contain') === opt.mode ? '#6366f1' : '#1e293b',
+                                                        color: 'white',
+                                                        border: '1px solid #334155',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <div style={{ marginTop: '8px' }}>
+                                            <label style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Pozisyon</label>
+                                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'space-between' }}>
+                                                {[
+                                                    { pos: 'left center', icon: <AlignLeft size={14} />, label: 'Sol' },
+                                                    { pos: 'center center', icon: <AlignCenter size={14} />, label: 'Orta' },
+                                                    { pos: 'right center', icon: <AlignRight size={14} />, label: 'Sağ' },
+                                                    { pos: 'top center', icon: <ArrowUpToLine size={14} />, label: 'Üst' },
+                                                    { pos: 'bottom center', icon: <ArrowDownToLine size={14} />, label: 'Alt' }
+                                                ].map(p => (
+                                                    <button
+                                                        key={p.pos}
+                                                        title={p.label}
+                                                        onClick={() => {
+                                                            saveHistory();
+                                                            setState(prev => {
+                                                                const updated = {
+                                                                    ...prev.selectedXsltElement!,
+                                                                    styleOverrides: { ...prev.selectedXsltElement!.styleOverrides, objectPosition: p.pos }
+                                                                };
+                                                                const newOverrides = prev.xsltOverrides.map(o => o.elementId === updated.elementId ? updated : o);
+                                                                if (!prev.xsltOverrides.find(o => o.elementId === updated.elementId)) newOverrides.push(updated);
+
+                                                                if (iframeRef.current?.contentWindow) {
+                                                                    iframeRef.current.contentWindow.postMessage({
+                                                                        type: 'UPDATE_ELEMENT_STYLE',
+                                                                        elementId: updated.elementId,
+                                                                        style: updated.styleOverrides
+                                                                    }, '*');
+                                                                }
+                                                                return { ...prev, selectedXsltElement: updated, xsltOverrides: newOverrides };
+                                                            });
+                                                        }}
+                                                        style={{
+                                                            padding: '6px',
+                                                            background: (state.selectedXsltElement?.styleOverrides.objectPosition || 'center center') === p.pos ? '#6366f1' : '#1e293b',
+                                                            color: 'white',
+                                                            border: '1px solid #334155',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flex: 1
+                                                        }}
+                                                    >
+                                                        {p.icon}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
 
 
                                 {(state.selectedXsltElement.elementType === 'image' || state.selectedXsltElement.elementType === 'img') && (
@@ -2121,6 +2416,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                         step="0.01"
                                                         style={{ flex: 1, height: '4px', accentColor: '#6366f1', cursor: 'pointer' }}
                                                         value={state.selectedXsltElement.styleOverrides.opacity !== undefined ? state.selectedXsltElement.styleOverrides.opacity : '1'}
+                                                        onMouseDown={() => saveHistory()}
                                                         onChange={(e) => {
                                                             const val = e.target.value;
                                                             setState(prev => {
@@ -2148,6 +2444,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                     max="100"
                                                     style={{ width: '100%', height: '4px', accentColor: '#6366f1', cursor: 'pointer' }}
                                                     value={parseInt(state.selectedXsltElement.styleOverrides.borderRadius as string || '0')}
+                                                    onMouseDown={() => saveHistory()}
                                                     onChange={(e) => {
                                                         const val = `${e.target.value}px`;
                                                         setState(prev => {
@@ -2449,8 +2746,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     // If placingMode IS active, the overlay (below) will handle it to ensure we capture clicks over iframe.
                                     if (!placingMode && state.selectedId) {
                                         const rect = e.currentTarget.getBoundingClientRect();
-                                        const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
-                                        const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
+                                        const clickX = (e.clientX - rect.left) / designZoom;
+                                        const clickY = (e.clientY - rect.top) / designZoom;
                                         const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
                                         const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
 
@@ -2478,8 +2775,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             const rect = e.currentTarget.getBoundingClientRect();
-                                            const clickX = (e.clientX - rect.left) / PREVIEW_SCALE;
-                                            const clickY = (e.clientY - rect.top) / PREVIEW_SCALE;
+                                            const clickX = (e.clientX - rect.left) / designZoom;
+                                            const clickY = (e.clientY - rect.top) / designZoom;
                                             const snapX = Math.round(clickX / SNAP_SIZE) * SNAP_SIZE;
                                             const snapY = Math.round(clickY / SNAP_SIZE) * SNAP_SIZE;
 
@@ -2525,7 +2822,7 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     {state.selectedXsltElement && state.selectedXsltElement.x !== undefined && (
                                         <DraggableElement
                                             key={state.selectedXsltElement.elementId}
-                                            scale={PREVIEW_SCALE}
+                                            scale={designZoom}
                                             element={{
                                                 id: state.selectedXsltElement.elementId,
                                                 type: 'text', // Dummy type
@@ -2538,6 +2835,8 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                 }
                                             }}
                                             isSelected={true}
+                                            onResize={handleResize}
+                                            onResizeStart={saveHistory}
                                             onClick={() => { }}
                                         />
                                     )}
@@ -2545,7 +2844,9 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                     {state.elements.map(el => (
                                         <DraggableElement
                                             key={el.id} element={el} isSelected={state.selectedIds.includes(el.id)}
-                                            scale={PREVIEW_SCALE}
+                                            scale={designZoom}
+                                            onResize={handleResize}
+                                            onResizeStart={saveHistory}
                                             onClick={(e) => {
                                                 const isMulti = e.ctrlKey || e.shiftKey;
                                                 setState(prev => {
@@ -2577,7 +2878,19 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                                 </span>
                                             )}
                                             {el.type === 'image' && (
-                                                <img src={el.content} alt="User element" style={{ width: '100%', height: '100%', objectFit: 'contain', ...cleanStyle(el.style) }} />
+                                                <img
+                                                    src={el.content}
+                                                    alt="User element"
+                                                    draggable={false}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'contain',
+                                                        userSelect: 'none',
+                                                        pointerEvents: 'none',
+                                                        ...cleanStyle(el.style)
+                                                    }}
+                                                />
                                             )}
                                             {el.type === 'shape' && (
                                                 <div style={{
@@ -2592,9 +2905,10 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                                             {el.type === 'qrcode' && (
                                                 <div style={{ ...cleanStyle(el.style), width: '100%', height: '100%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                     <img
-                                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(el.content || 'QR-CODE')}`}
+                                                        src={el.content && el.content.startsWith('http') ? el.content : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(el.content || 'QR-CODE')}`}
                                                         alt="QR Code"
-                                                        style={{ maxWidth: '100%', maxHeight: '100%' }}
+                                                        draggable={false}
+                                                        style={{ maxWidth: '100%', maxHeight: '100%', pointerEvents: 'none', userSelect: 'none' }}
                                                     />
                                                 </div>
                                             )}
@@ -2683,17 +2997,37 @@ export const ProfessionalDesigner: React.FC<ProfessionalDesignerProps> = ({ temp
                         </div>
                     </div>
 
-                    <div style={{ flex: 1, overflow: 'auto', background: '#f1f5f9', padding: '1rem', position: 'relative' }}>
-                        <div style={{ margin: '0 auto', width: '210mm', minHeight: '297mm', background: 'white', boxShadow: '0 0 10px rgba(0,0,0,0.1)', transform: `scale(${previewZoom})`, transformOrigin: 'top center' }}>
-                            <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none', minHeight: '297mm' }} title="Live Preview" />
+                    {/* Right Live Preview Section */}
+                    <div style={{ flex: 1, background: '#f1f5f9', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+
+                        {/* Scrollable Content Area */}
+                        <div style={{ flex: 1, overflow: 'auto', padding: '2rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                            <div style={{
+                                width: `${794 * previewZoom}px`,
+                                height: `${1123 * previewZoom}px`,
+                                flexShrink: 0,
+                                transition: 'width 0.2s, height 0.2s'
+                            }}>
+                                <div style={{
+                                    width: '794px',
+                                    height: '1123px',
+                                    background: 'white',
+                                    boxShadow: '0 0 20px rgba(0,0,0,0.1)',
+                                    transform: `scale(${previewZoom})`,
+                                    transformOrigin: 'top left',
+                                    transition: 'transform 0.2s'
+                                }}>
+                                    <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', border: 'none' }} title="Live Preview" />
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Live Preview Zoom Controls */}
+                        {/* Floating Live Preview Zoom Controls */}
                         <div style={{
                             position: 'absolute', bottom: '20px', right: '20px',
                             background: '#1e293b', padding: '6px', borderRadius: '8px',
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            border: '1px solid #334155', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
                             zIndex: 100
                         }}>
                             <button
