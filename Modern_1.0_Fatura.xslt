@@ -8,6 +8,8 @@
 
     <xsl:output method="html" encoding="UTF-8" indent="yes" doctype-public="-//W3C//DTD HTML 4.01 Transitional//EN"/>
 
+    <xsl:decimal-format name="european" decimal-separator="," grouping-separator="." NaN="" />
+
     <xsl:template match="/">
         <html>
             <head>
@@ -157,17 +159,17 @@
                                         <xsl:text> </xsl:text>
                                         <span style="font-size:8pt"><xsl:value-of select="cbc:InvoicedQuantity/@unitCode"/></span>
                                     </td>
-                                    <td class="text-right"><xsl:value-of select="format-number(cac:Price/cbc:PriceAmount, '###.##0,00')"/></td>
+                                    <td class="text-right"><xsl:value-of select="format-number(cac:Price/cbc:PriceAmount, '###.##0,00', 'european')"/></td>
                                     <td class="text-right">
                                         <xsl:choose>
                                             <xsl:when test="cac:AllowanceCharge/cbc:Amount">
-                                                 <xsl:value-of select="format-number(cac:AllowanceCharge/cbc:Amount, '###.##0,00')"/>
+                                                 <xsl:value-of select="format-number(cac:AllowanceCharge/cbc:Amount, '###.##0,00', 'european')"/>
                                             </xsl:when>
                                             <xsl:otherwise>-</xsl:otherwise>
                                         </xsl:choose>
                                     </td>
                                     <td class="text-right" style="font-weight:600;">
-                                        <xsl:value-of select="format-number(cbc:LineExtensionAmount, '###.##0,00')"/>
+                                        <xsl:value-of select="format-number(cbc:LineExtensionAmount, '###.##0,00', 'european')"/>
                                     </td>
                                 </tr>
                             </xsl:for-each>
@@ -179,19 +181,19 @@
                         <table class="totals-table">
                             <tr>
                                 <td class="label">Ara Toplam</td>
-                                <td class="amount"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:LineExtensionAmount, '###.##0,00')"/></td>
+                                <td class="amount"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:LineExtensionAmount, '###.##0,00', 'european')"/></td>
                             </tr>
                             <tr>
                                 <td class="label">İskonto Toplamı</td>
-                                <td class="amount"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount, '###.##0,00')"/></td>
+                                <td class="amount"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount, '###.##0,00', 'european')"/></td>
                             </tr>
                             <tr>
                                 <td class="label">KDV Toplamı</td>
-                                <td class="amount"><xsl:value-of select="format-number(//cac:TaxTotal/cbc:TaxAmount, '###.##0,00')"/></td>
+                                <td class="amount"><xsl:value-of select="format-number(//cac:TaxTotal/cbc:TaxAmount, '###.##0,00', 'european')"/></td>
                             </tr>
                              <tr>
                                 <td class="label grand-total">GENEL TOPLAM</td>
-                                <td class="amount grand-total"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:PayableAmount, '###.##0,00')"/> <xsl:value-of select="//cbc:DocumentCurrencyCode"/></td>
+                                <td class="amount grand-total"><xsl:value-of select="format-number(//cac:LegalMonetaryTotal/cbc:PayableAmount, '###.##0,00', 'european')"/> <xsl:value-of select="//cbc:DocumentCurrencyCode"/></td>
                             </tr>
                         </table>
                     </div>
