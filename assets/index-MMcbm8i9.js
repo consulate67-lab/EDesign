@@ -372,11 +372,13 @@ ${P}
                         <thead>
                             <tr>
                                 <th width="5%">#</th>
-                                <th width="40%">Ürün / Hizmet</th>
+                                <th width="35%">Ürün / Hizmet</th>
                                 <th width="10%" class="text-right">Miktar</th>
-                                <th width="15%" class="text-right">Birim Fiyat</th>
+                                <th width="12%" class="text-right">Birim Fiyat</th>
                                 <th width="10%" class="text-right">İskonto</th>
-                                <th width="20%" class="text-right">Tutar</th>
+                                <th width="8%" class="text-center">KDV</th>
+                                <th width="10%" class="text-right">KDV Tutarı</th>
+                                <th width="10%" class="text-right">Tutar</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -400,6 +402,12 @@ ${P}
                                             </xsl:when>
                                             <xsl:otherwise>-</xsl:otherwise>
                                         </xsl:choose>
+                                    </td>
+                                    <td class="text-center">
+                                        %<xsl:value-of select="cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cbc:Percent"/>
+                                    </td>
+                                    <td class="text-right">
+                                        <xsl:value-of select="format-number(cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount, '###.##0,00', 'european')"/>
                                     </td>
                                     <td class="text-right" style="font-weight:600;">
                                         <xsl:value-of select="format-number(cbc:LineExtensionAmount, '###.##0,00', 'european')"/>
