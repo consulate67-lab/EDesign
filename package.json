@@ -6,12 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.app.json && vite build",
+    "build": "node scripts/smart-build.js",
+    "build:frontend": "tsc -p tsconfig.app.json && vite build",
     "start": "node server/index.js",
     "server:dev": "node --watch server/index.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build:frontend",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
