@@ -1,0 +1,20 @@
+# Railpack override — forces this project to be treated as a plain Node.js
+# service, NOT a Vite static site. Railpack auto-detects "vite static site"
+# from the vite dependency in package.json, which makes it copy only
+# package.json + node_modules into the build context (skipping src/),
+# which in turn breaks `tsc -p tsconfig.app.json`.
+#
+# Declaring provider = "node" here tells Railpack to use the Node.js
+# template directly, which copies the full repo to the build context.
+
+[_]
+schemaVersion = "0.39.0"
+
+[provider]
+name = "node"
+
+[phases.build]
+cmds = ["npm install --include=dev"]
+
+[phases.deploy]
+cmd = "node server/index.js"
