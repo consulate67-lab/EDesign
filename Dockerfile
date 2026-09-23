@@ -2,6 +2,8 @@
 #
 # Stage 1 — build: install all deps (incl. devDependencies for any build step)
 # Stage 2 — runtime: slim image, production-only deps, run as non-root
+#
+# Touched 2026-09-23 to force Railway snapshot re-upload (file hash change)
 
 # ---------- Stage 1: deps ----------
 FROM node:20-alpine AS deps
