@@ -1,9 +1,19 @@
+import React from 'react';
+
 export type ElementType = 'text' | 'table' | 'image' | 'formula' | 'shape' | 'qrcode';
 
 export interface TableCell {
   content: string;
   binding?: string;
   style?: React.CSSProperties;
+}
+
+export interface StructureNode {
+  id: string;
+  tagName: string;
+  xpath?: string;
+  children?: StructureNode[];
+  label?: string;
 }
 
 export interface DesignElement {
@@ -29,7 +39,7 @@ export interface DesignElement {
 
 export interface XsltElementOverride {
   elementId: string; // Unique ID for the XSLT element
-  elementType: 'field' | 'image' | 'img' | 'table' | 'tr' | 'td' | 'th'; // Type of element
+  elementType: 'field' | 'image' | 'img' | 'table' | 'tr' | 'td' | 'th' | 'qrcode'; // Type of element
   path?: string; // XPath or src for the element
   x?: number; // X position relative to the workspace
   y?: number; // Y position relative to the workspace
@@ -42,7 +52,11 @@ export interface XsltElementOverride {
   rowCount?: number;
   colCount?: number;
   shapeType?: 'rect' | 'circle' | 'line'; // NEW: Recognition for shapes in XSLT
-  hierarchy?: { id: string; tag: string; className?: string }[]; // NEW: Parent hierarchy
+  hierarchy?: { id: string; tag: string; className?: string }[];
+  offsetX?: number;
+  offsetY?: number;
+  src?: string;
+  htmlTag?: string;
 }
 
 export interface DesignState {
@@ -54,4 +68,5 @@ export interface DesignState {
   selectedIds: string[]; // NEW: Multi-selection support
   selectedXsltElement: XsltElementOverride | null; // NEW: Currently selected XSLT element
   themeColor?: string; // NEW: Global theme color for the document
+  structureTree?: StructureNode[]; // NEW: Full DOM structure tree for Layers panel
 }

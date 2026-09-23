@@ -4,9 +4,10 @@ import { api } from './api';
 import { PaymentModal } from './PaymentModal.tsx';
 import { TemplateGallery } from './TemplateGallery.tsx';
 import { XSLTTemplate, xsltTemplates } from './templates';
+import { useUiStore } from './store/uiStore';
 
 interface SelectionProps {
-    onSelect: (moduleId: string, template: string, moduleName: string, customContent?: string) => void;
+    onSelect: (moduleId: string, template: string, moduleName: string, customContent?: string, themeColor?: string) => void;
     onLogout: () => void;
 }
 
@@ -78,10 +79,51 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // 5 MB upload cap — designer previews inline as text.
+        const MAX_BYTES = 5 * 1024 * 1024;
+        if (file.size > MAX_BYTES) {
+            useUiStore.getState().pushToast({
+                kind: 'error',
+                title: 'Dosya çok büyük',
+                description: `Maksimum 5 MB. Seçilen dosya: ${(file.size / 1024 / 1024).toFixed(1)} MB`,
+            });
+            e.target.value = '';
+            return;
+        }
+
+        const allowed = ['.xslt', '.xsl', '.xml'];
+        const lower = file.name.toLowerCase();
+        if (!allowed.some((ext) => lower.endsWith(ext))) {
+            useUiStore.getState().pushToast({
+                kind: 'error',
+                title: 'Geçersiz dosya tipi',
+                description: 'Yalnızca .xslt, .xsl veya .xml dosyaları kabul edilir.',
+            });
+            e.target.value = '';
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
             const content = event.target?.result as string;
+            if (!content || !content.trim().startsWith('<')) {
+                useUiStore.getState().pushToast({
+                    kind: 'error',
+                    title: 'Geçersiz XSLT içeriği',
+                    description: 'Dosya XML/XSLT olarak okunamadı.',
+                });
+                e.target.value = '';
+                return;
+            }
             onSelect('custom', file.name, 'Özel Belge', content);
+        };
+        reader.onerror = () => {
+            useUiStore.getState().pushToast({
+                kind: 'error',
+                title: 'Dosya okunamadı',
+                description: reader.error?.message ?? 'Bilinmeyen hata',
+            });
+            e.target.value = '';
         };
         reader.readAsText(file);
     };
@@ -93,41 +135,13 @@ export const Selection: React.FC<SelectionProps> = ({ onSelect, onLogout }) => {
         if (docTypeId) {
             const module = modules.find(m => m.id === docTypeId);
             if (module) {
-                fileName = module.template;
+                // Keep the design from the gallery (template.fileName), only update name context
                 moduleName = `${template.name} - ${module.name}`;
             }
         }
 
-        // Pass theme color using a special prefix in customContent or via a new prop? 
-        // Since we didn't change App.tsx interface yet, let's look at App.tsx again.
-        // App.tsx interface: (moduleId, template, moduleName, customContent?)
-        // We can pass the theme color in customContent as a JSON string if it's not a file content.
-        // OR, better: We updated App to have `themeColor` in state? No I haven't updated App.tsx yet.
-        // I will adhere to the plan: Update App.tsx NEXT.
-        // So here I will pass it as an extra arg if I can, or piggyback.
-        // Let's assume onSelect can take 5th arg or I update it now.
-        // Let's check SelectionProps. 
-        // interface SelectionProps { onSelect: (moduleId, template, moduleName, customContent?) => void }
-        // I will change SelectionProps AND App.tsx.
-
-        onSelect('library', fileName, moduleName, template.previewColor); // Piggybacking color on customContent for now? 
-        // Wait, customContent is usually file string. If I pass hex code, ProfessionalDesigner might get confused if it expects XML.
-        // ProfessionalDesigner checks `if (customContent)`.
-        // It treats it as XML content.
-
-        // So I MUST update App.tsx first or simultaneously. 
-        // But tool use is sequential. 
-        // I'll update the logic here to match the clearer intent, then update App.tsx.
-        // I will use `customContent` as `themeColor` ONLY IF `moduleId` is 'library'.
-        // Wait, `library` loads `template`.
-        // `custom` loads `customContent`.
-        // If I use `library`, `customContent` is ignored by `ProfessionalDesigner`'s `useEffect`?
-        // Let's check ProfessionalDesigner lines 80-120.
-        // `if (moduleId === 'custom' && customContent) { text = customContent; }`
-        // So if moduleId is 'library', customContent is IGNORED for loading XML. 
-        // PERFECT. I can pass color in customContent!
-
-        onSelect('library', fileName, moduleName, template.previewColor);
+        // Theme color is passed as a dedicated 5th argument (no customContent hack).
+        onSelect('library', fileName, moduleName, undefined, template.previewColor);
         setShowGallery(false);
     };
 

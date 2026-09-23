@@ -1,6 +1,19 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 
+/**
+ * Adds a column to the users table if it does not already exist.
+ * Uses SQLite's `PRAGMA table_info` to check before issuing ALTER TABLE,
+ * so re-running the migration is a no-op without the silent try/catch hack.
+ */
+const ensureColumn = async (db, column, definition) => {
+  const columns = await db.all(`PRAGMA table_info(users)`);
+  if (columns.some((c) => c.name === column)) return false;
+  console.log(`[db] Migration: adding column users.${column}`);
+  await db.exec(`ALTER TABLE users ADD COLUMN ${column} ${definition}`);
+  return true;
+};
+
 export const initDb = async () => {
   const db = await open({
     filename: './server/database.sqlite',
@@ -21,10 +34,10 @@ export const initDb = async () => {
     )
   `);
 
-  // Migration: Add columns if they don't exist
-  try { await db.exec("ALTER TABLE users ADD COLUMN full_name TEXT"); } catch (e) { }
-  try { await db.exec("ALTER TABLE users ADD COLUMN company_name TEXT"); } catch (e) { }
-  try { await db.exec("ALTER TABLE users ADD COLUMN phone_number TEXT"); } catch (e) { }
+  // Idempotent column migrations
+  await ensureColumn(db, 'full_name', 'TEXT');
+  await ensureColumn(db, 'company_name', 'TEXT');
+  await ensureColumn(db, 'phone_number', 'TEXT');
 
   return db;
 };

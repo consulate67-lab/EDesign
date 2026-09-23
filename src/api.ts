@@ -1,19 +1,81 @@
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_URL = isLocal ? 'http://localhost:3002/api' : '/api';
 
-// Demo Mode state - persisted
-const getStoredCredits = () => parseInt(localStorage.getItem('demo_credits') || '5');
-const updateStoredCredits = (val: number) => {
-    localStorage.setItem('demo_credits', val.toString());
-    return val;
+// Session storage is used instead of localStorage for auth tokens to limit
+// the XSS attack surface: tokens are cleared when the browser tab closes.
+const TOKEN_STORAGE = (() => {
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
+    } catch { /* SSR safety */ }
+    // Fallback for environments without sessionStorage (tests, sandboxed iframes)
+    const mem: Record<string, string> = {};
+    return {
+        getItem: (k: string) => mem[k] ?? null,
+        setItem: (k: string, v: string) => { mem[k] = v; },
+        removeItem: (k: string) => { delete mem[k]; },
+    } as Storage;
+})();
+
+const IS_DEV = import.meta.env.DEV;
+
+// --- DEV-ONLY MOCK DATABASE ---
+// Only seeded when running the Vite dev server. In production builds the
+// mock layer is entirely disabled — the client only talks to the real API.
+const INITIAL_USERS = IS_DEV ? [
+    {
+        username: 'sarp@yilmaz.com',
+        password: '123456',
+        full_name: 'Sarp Yılmaz',
+        company_name: 'Super Admin (DEV)',
+        role: 'admin',
+        credits: 999999,
+        token: 'admin-token-dev-only',
+        phone: '555-000-0000'
+    },
+    {
+        username: 'demo',
+        password: '123',
+        full_name: 'Demo Kullanıcı',
+        company_name: 'Demo Ltd.',
+        role: 'user',
+        credits: 5,
+        token: 'demo-token-dev-only',
+        phone: '555-123-4567'
+    }
+] : [];
+
+// Mock DB accessors — no-op when not in dev mode.
+const getUsers = () => {
+    if (!IS_DEV) return [];
+    const stored = localStorage.getItem('mock_users_db');
+    if (!stored) {
+        localStorage.setItem('mock_users_db', JSON.stringify(INITIAL_USERS));
+        return INITIAL_USERS;
+    }
+    return JSON.parse(stored);
 };
-let demoCredits = getStoredCredits();
+
+const saveUsers = (users: any[]) => {
+    if (!IS_DEV) return;
+    localStorage.setItem('mock_users_db', JSON.stringify(users));
+};
+
+const findUserByToken = (token: string) => {
+    const users = getUsers();
+    return users.find((u: any) => u.token === token);
+};
+
+const findUserByCreds = (username: string, password: string) => {
+    const users = getUsers();
+    return users.find((u: any) => u.username === username && u.password === password);
+};
 
 export const api = {
-    getToken: () => localStorage.getItem('token'),
-    setToken: (token: string) => localStorage.setItem('token', token),
-    logout: () => localStorage.removeItem('token'),
+    getToken: () => TOKEN_STORAGE.getItem('token'),
+    setToken: (token: string) => TOKEN_STORAGE.setItem('token', token),
+    logout: () => TOKEN_STORAGE.removeItem('token'),
 
+    // Generic Request Handler with Mock Fallback
     async request(endpoint: string, options: RequestInit = {}) {
         const token = this.getToken();
         const headers = {
@@ -23,119 +85,208 @@ export const api = {
         };
 
         try {
+            // Attempt real API call first
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 800); // Short timeout for local check
+
             const res = await fetch(`${API_URL}${endpoint}`, {
                 ...options,
-                headers
-            });
+                headers,
+                signal: controller.signal
+            }).catch(e => { throw e; });
 
-            if (res.status === 401 || res.status === 403) {
-                // Potential session expiry
-            }
+            clearTimeout(id);
 
             const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || 'API Request Failed');
-            }
+            if (!res.ok) throw new Error(data.error || 'API Request Failed');
             return data;
-        } catch (err) {
-            console.warn('⚠️ API Connection failed. Falling back to Demo Mode.', err);
-            // Mock data for Demo Mode
-            if (endpoint === '/me') {
-                const token = api.getToken();
-                if (token === 'admin-token') {
-                    return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarp@yilmaz.com', email: 'sarp@yilmaz.com' };
-                }
-                return { full_name: 'Demo Kullanıcı', credits: demoCredits, company_name: 'Demo Ltd.', username: 'demo_user' };
-            }
-            if (endpoint === '/auth/login') return { token: 'demo-token' };
 
+        } catch (err) {
+            // Production builds must never fall back to a local mock database.
+            // The fallback below is only useful for offline dev work.
+            if (!IS_DEV) {
+                throw new Error(
+                    `Backend API is unavailable (${endpoint}). Lütfen daha sonra tekrar deneyin.`
+                );
+            }
+
+            console.warn(`⚠️ API Unreachable (${endpoint}). Using DEV-only mock logic.`);
+
+            // Parse body if it exists
+            const body = options.body ? JSON.parse(options.body as string) : {};
+
+            // --- STRICT MOCK LOGIC (DEV ONLY) ---
+
+            // 1. LOGIN
+            if (endpoint === '/auth/login') {
+                const user = findUserByCreds(body.username, body.password);
+                if (user) {
+                    return { token: user.token, role: user.role, full_name: user.full_name };
+                }
+                throw new Error('Kullanıcı adı veya şifre hatalı!');
+            }
+
+            // 2. REGISTER
+            if (endpoint === '/auth/register') {
+                const users = getUsers();
+                if (users.find((u: any) => u.username === body.username)) {
+                    throw new Error('Bu kullanıcı adı zaten alınmış.');
+                }
+                const newUser = {
+                    username: body.username,
+                    password: body.password,
+                    full_name: body.full_name,
+                    company_name: body.company_name,
+                    role: 'user',
+                    credits: 1, // Starter credits
+                    token: 'token_' + Date.now(),
+                    phone: body.phone_number
+                };
+                users.push(newUser);
+                saveUsers(users);
+                return { token: newUser.token, role: newUser.role, full_name: newUser.full_name };
+            }
+
+            // 3. GET ME (Validates Token)
+            if (endpoint === '/me') {
+                const user = findUserByToken(token || '');
+                if (user) {
+                    return {
+                        full_name: user.full_name,
+                        role: user.role,
+                        credits: user.credits,
+                        company_name: user.company_name,
+                        username: user.username,
+                        email: user.username,
+                        phone_number: user.phone
+                    };
+                }
+                throw new Error('Oturum süresi doldu, lütfen tekrar giriş yapın.');
+            }
+
+            // 4. CONSUME CREDIT
             if (endpoint.includes('/design/consume-credit')) {
-                if (demoCredits > 0) {
-                    demoCredits--;
-                    updateStoredCredits(demoCredits);
-                    return { success: true, credits: demoCredits };
+                const users = getUsers();
+                const userIndex = users.findIndex((u: any) => u.token === token);
+
+                if (userIndex === -1) throw new Error('Oturum geçersiz.');
+
+                if (users[userIndex].credits > 0) {
+                    users[userIndex].credits--;
+                    saveUsers(users);
+                    return { success: true, credits: users[userIndex].credits };
                 } else {
                     throw new Error('Yetersiz kredi! Lütfen kredi yükleyin.');
                 }
             }
 
+            // 5. ADD CREDITS (Mock Payment)
             if (endpoint.includes('/payment/mock')) {
-                const amount = (options.body ? JSON.parse(options.body as string).amount : 100) || 100;
-                demoCredits += amount;
-                updateStoredCredits(demoCredits);
-                return { success: true, credits: demoCredits };
+                const users = getUsers();
+                const userIndex = users.findIndex((u: any) => u.token === token);
+                if (userIndex > -1) {
+                    const amount = typeof body.amount === 'number' ? body.amount : 100;
+                    users[userIndex].credits += amount;
+                    saveUsers(users);
+                    return { success: true, credits: users[userIndex].credits };
+                }
+            }
+
+            // Admin Add Credits
+            if (endpoint === '/admin/add-credits') {
+                const users = getUsers();
+                // Only admin can do this realistically, but simplified here
+                const admin = findUserByToken(token || '');
+                if (admin && admin.role === 'admin') {
+                    // Add to self for demo
+                    const idx = users.findIndex((u: any) => u.username === admin.username);
+                    users[idx].credits += 1000;
+                    saveUsers(users);
+                    return { success: true };
+                }
             }
 
             return { success: true };
         }
     },
 
-    // Admin & Template Logic
+    // Convenience Wrappers
     login: (username: string, password: string) => {
-        // Super Admin Check
-        if (username === 'sarp@yilmaz.com' && password === '07072017') {
-            return Promise.resolve({ token: 'admin-token', role: 'admin', full_name: 'Sarp Yılmaz' });
-        }
         return api.request('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
     },
 
-    register: (details: { username: string, password: string, full_name: string, company_name: string, phone_number: string }) => api.request('/auth/register', {
+    register: (details: any) => api.request('/auth/register', {
         method: 'POST',
         body: JSON.stringify(details)
     }),
 
     getMe: async () => {
-        const token = api.getToken();
-        if (token === 'admin-token') {
-            return { full_name: 'Sarp Yılmaz', role: 'admin', credits: 999999, company_name: 'Super Admin', username: 'sarp@yilmaz.com', email: 'sarp@yilmaz.com' };
-        }
-        // If not admin token but fallback to request, request will likely fail and fallback to demo user in catch block
         return api.request('/me');
     },
 
     consumeCredit: () => api.request('/design/consume-credit', { method: 'POST' }),
 
-    // Dev/Mock Payment
     addCredits: (amount: number) => api.request('/payment/mock', {
         method: 'POST',
         body: JSON.stringify({ amount })
     }),
 
-    // Admin helper
     makeMeRich: () => api.request('/admin/add-credits', { method: 'POST' }),
 
-    // Template Management (Mock DB)
+    // --- TEMPLATE MANAGEMENT (Mock DB) ---
+    // NOTE: These mock storage helpers are only used in DEV builds.
+    // In production the backend endpoints under /api/templates/* are required.
     saveTemplate: (template: any) => {
-        return new Promise(async (resolve) => {
-            const user = await api.getMe();
-            const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
-            const newTemp = {
-                ...template,
-                id: 'temp_' + Date.now(),
-                status: 'pending', // Pending approval
-                createdAt: new Date().toISOString(),
-                username: user.username || 'Anonymous',
-                docType: template.docType || 'Bilinmiyor'
-            };
-            temps.push(newTemp);
-            localStorage.setItem('mock_templates', JSON.stringify(temps));
-            setTimeout(() => resolve({ success: true, id: newTemp.id }), 500);
+        return new Promise(async (resolve, reject) => {
+            if (!IS_DEV) {
+                return reject(new Error('saveTemplate backend endpoint not implemented yet.'));
+            }
+            try {
+                const user = await api.getMe(); // Must be logged in
+                const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+                const newTemp = {
+                    ...template,
+                    id: 'temp_' + Date.now(),
+                    status: 'pending', // Always pending initially
+                    createdAt: new Date().toISOString(),
+                    username: user.username,
+                    docType: template.docType || 'Bilinmiyor'
+                };
+                temps.push(newTemp);
+                localStorage.setItem('mock_templates', JSON.stringify(temps));
+                setTimeout(() => resolve({ success: true, id: newTemp.id }), 500);
+            } catch (e) {
+                reject(e);
+            }
         });
     },
 
     getTemplates: (status: 'pending' | 'approved' = 'approved') => {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            if (!IS_DEV) {
+                return reject(new Error('getTemplates backend endpoint not implemented yet.'));
+            }
             const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
             const filtered = temps.filter((t: any) => t.status === status);
+            // Simulate network delay
             setTimeout(() => resolve(filtered), 300);
         });
     },
 
     approveTemplate: (id: string) => {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve, reject) => {
+            if (!IS_DEV) {
+                return reject(new Error('approveTemplate backend endpoint not implemented yet.'));
+            }
+            // Verify admin
+            const user = await api.getMe().catch(() => null);
+            if (!user || user.role !== 'admin') {
+                return reject('Yetkisiz işlem!');
+            }
+
             const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
             const updated = temps.map((t: any) => t.id === id ? { ...t, status: 'approved' } : t);
             localStorage.setItem('mock_templates', JSON.stringify(updated));
@@ -144,8 +295,27 @@ export const api = {
     },
 
     deleteTemplate: (id: string) => {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve, reject) => {
+            if (!IS_DEV) {
+                return reject(new Error('deleteTemplate backend endpoint not implemented yet.'));
+            }
+            // Verify user or admin
+            const user = await api.getMe().catch(() => null);
+            if (!user) return reject('Oturum gerekli');
+
             const temps = JSON.parse(localStorage.getItem('mock_templates') || '[]');
+            // Allow if admin OR if owner
+            const template = temps.find((t: any) => t.id === id);
+
+            if (!template) {
+                // Already deleted?
+                return resolve({ success: true });
+            }
+
+            if (user.role !== 'admin' && template.username !== user.username) {
+                return reject('Bunu silmeye yetkiniz yok');
+            }
+
             const updated = temps.filter((t: any) => t.id !== id);
             localStorage.setItem('mock_templates', JSON.stringify(updated));
             resolve({ success: true });

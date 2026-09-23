@@ -2,67 +2,90 @@ export interface XSLTTemplate {
     id: string;
     name: string;
     description: string;
-    category: 'Genel' | 'Modern' | 'Klasik' | 'Kurumsal';
+    category: 'e-Fatura' | 'e-Arşiv' | 'e-İrsaliye' | 'Diğer';
     fileName: string;
     previewColor: string;
     thumbnail?: string;
 }
 
 export const xsltTemplates: XSLTTemplate[] = [
+    // --- e-Fatura ---
     {
-        id: 'blank-design',
-        name: 'Boş Tasarım',
-        description: 'Tamamen boş bir sayfa ile sıfırdan kendi tasarımınızı oluşturun.',
-        category: 'Genel',
-        fileName: 'Blank_Design.xslt',
-        previewColor: '#94a3b8'
-    },
-    {
-        id: 'gib-standard',
-        name: 'GİB Standart',
-        description: 'Gelir İdaresi Başkanlığı resmi formatı. Resmi ve sade görünüm.',
-        category: 'Klasik',
-        fileName: 'Antrepo_Fatura.xslt',
+        id: 'efatura-gib',
+        name: 'Resmi e-Fatura (GİB)',
+        description: 'Gelir İdaresi Başkanlığı standartlarına uygun, resmi ve klasik fatura tasarımı.',
+        category: 'e-Fatura',
+        fileName: 'Classic_Corporate.xslt',
         previewColor: '#64748b'
     },
     {
-        id: 'modern-blue',
-        name: 'Modern Safir',
+        id: 'efatura-modern',
+        name: 'Modern e-Fatura',
         description: 'Mavi tonlarında, yuvarlatılmış hatlar ve modern tipografi içeren profesyonel tasarım.',
-        category: 'Modern',
-        fileName: 'Antrepo_Net.xslt',
+        category: 'e-Fatura',
+        fileName: 'Modern_1.0_Fatura.xslt',
         previewColor: '#3b82f6'
     },
     {
-        id: 'corporate-gold',
-        name: 'Kurumsal Altın',
-        description: 'Şık ve ağırbaşlı bir görünüm için altın/turuncu detaylar içeren kurumsal tasarım.',
-        category: 'Kurumsal',
-        fileName: 'Antrepo_Arsiv-mikro.xslt',
+        id: 'efatura-gold',
+        name: 'Kurumsal e-Fatura',
+        description: 'Şık ve ağırbaşlı bir görünüm için özelleştirilmiş kurumsal şablon.',
+        category: 'e-Fatura',
+        fileName: 'Classic_Corporate.xslt',
         previewColor: '#f59e0b'
     },
+
+    // --- e-Arşiv ---
     {
-        id: 'clean-green',
-        name: 'Eko Yeşil',
-        description: 'Hafif ve çevreci bir görünüm sunan yeşil tonlu temiz e-arşiv tasarımı.',
-        category: 'Modern',
-        fileName: 'antrepo_arsiv.xslt',
+        id: 'earsiv-std',
+        name: 'Standart e-Arşiv',
+        description: 'e-Arşiv faturaları için klasik, yazıcı dostu format.',
+        category: 'e-Arşiv',
+        fileName: 'Classic_Corporate.xslt',
+        previewColor: '#475569'
+    },
+    {
+        id: 'earsiv-clean',
+        name: 'Eko e-Arşiv (Yeşil)',
+        description: 'Dijital gönderimler için optimize edilmiş, hafif ve çevreci e-arşiv tasarımı.',
+        category: 'e-Arşiv',
+        fileName: 'Modern_1.0_Fatura.xslt',
         previewColor: '#10b981'
     },
     {
-        id: 'minimal-dark',
-        name: 'Minimal Karbon',
-        description: 'Siyah ve gri tonlarında oldukça sade ve profesyonel bir tercih.',
-        category: 'Klasik',
-        fileName: 'Antrepo_Yolcu.xslt',
-        previewColor: '#1e293b'
+        id: 'earsiv-creative',
+        name: 'Yaratıcı e-Arşiv (Mor)',
+        description: 'Dikkat çekici renkler kullanan modern e-Arşiv şablonu.',
+        category: 'e-Arşiv',
+        fileName: 'Modern_1.0_Fatura.xslt',
+        previewColor: '#8b5cf6'
+    },
+
+    // --- e-İrsaliye ---
+    {
+        id: 'irsaliye-std',
+        name: 'Standart İrsaliye (Örnek)',
+        description: 'Sevkiyat süreçleri için uygun, sade irsaliye şablonu.',
+        category: 'e-İrsaliye',
+        fileName: 'irsaliye.xslt',
+        previewColor: '#f97316'
+    },
+
+    // --- Diğer ---
+    {
+        id: 'smm-std',
+        name: 'Serbest Meslek Makbuzu',
+        description: 'Serbest meslek erbabı için uygun makbuz formatı.',
+        category: 'Diğer',
+        fileName: 'Classic_Corporate.xslt',
+        previewColor: '#0ea5e9'
     },
     {
-        id: 'expert-purple',
-        name: 'Uzman Mor',
-        description: 'Yaratıcı ve dikkat çekici, mor vurgulu modern tasarım.',
-        category: 'Modern',
-        fileName: 'Antrepo_Ihracat.xslt',
-        previewColor: '#8b5cf6'
+        id: 'blank',
+        name: 'Boş Şablon',
+        description: 'Sıfırdan tasarım yapmak için temiz altyapı.',
+        category: 'Diğer',
+        fileName: 'Modern_1.0_Fatura.xslt',
+        previewColor: '#94a3b8'
     }
 ];

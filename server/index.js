@@ -5,11 +5,36 @@ import jwt from 'jsonwebtoken';
 import { initDb } from './db.js';
 
 const app = express();
-const PORT = 3002;
-const SECRET_KEY = 'super-secret-key-dev-only';
+const PORT = process.env.PORT || 3002;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// JWT secret must be supplied via env in production.
+const SECRET_KEY = process.env.JWT_SECRET;
+if (!SECRET_KEY && NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable must be set in production.');
+}
+if (!SECRET_KEY) {
+    console.warn('[SECURITY] JWT_SECRET not set — using insecure development fallback. DO NOT use in production.');
+}
+const EFFECTIVE_SECRET = SECRET_KEY || 'dev-only-insecure-fallback-do-not-use-in-production';
+
+// Allowed CORS origins. Comma-separated. Defaults to local dev hosts.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS
+    || 'http://localhost:5173,http://localhost:3002,http://127.0.0.1:5173,http://127.0.0.1:3002')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow same-origin or curl-like requests with no origin header.
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        return callback(new Error(`CORS policy violation: origin ${origin} not allowed`));
+    },
+    credentials: true,
+}));
 app.use(express.json()); // Body parser
 
 let db;
@@ -21,7 +46,7 @@ const authenticateToken = (req, res, next) => {
 
     if (!token) return res.sendStatus(401);
 
-    jwt.verify(token, SECRET_KEY, (err, user) => {
+    jwt.verify(token, EFFECTIVE_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
         req.user = user;
         next();
@@ -80,7 +105,7 @@ app.post('/api/auth/login', async (req, res) => {
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) return res.status(400).json({ error: 'Girdiğiniz şifre hatalı. Lütfen tekrar deneyin.' });
 
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY);
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, EFFECTIVE_SECRET);
         res.json({ token, user: { id: user.id, username: user.username, role: user.role, credits: user.credits } });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -147,9 +172,9 @@ app.post('/api/design/consume-credit', authenticateToken, async (req, res) => {
 
 // Admin: Make me rich
 app.post('/api/admin/add-credits', authenticateToken, async (req, res) => {
-    // Determine admin by simple check or strictly via DB role. 
-    // To allow "self-promotion" for dev environment:
-    // Any logged in user can call this in DEV mode.
+    if (req.user.role !== 'admin') {
+        return res.sendStatus(403);
+    }
     try {
         await db.run('UPDATE users SET credits = credits + 1000 WHERE id = ?', [req.user.id]);
         res.json({ success: true, message: 'Dev credits added' });
