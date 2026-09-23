@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files (real .env is gitignored, .env.example is tracked)
+.env
+.env.local
+.env.*.local
+
+# Python helper scripts + their outputs (XSLT validation tools)
+*.py
+*_output.txt
+check_*.txt
+binary_check.txt
+malformed_check.txt

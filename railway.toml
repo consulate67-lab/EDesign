@@ -1,0 +1,28 @@
+# Railway configuration
+# Docs: https://docs.railway.com/reference/config-as-code
+#
+# This file tells Railway to:
+#   1. Build the project using the Dockerfile at the repo root
+#   2. Run only the Express server (server/index.js) — NOT the Vite dev server
+#   3. Replicate the deployment if it crashes (max 10 retries)
+#   4. Hit /api/health every 30s to detect a stuck process
+#
+# Required Railway environment variables (set in the Railway dashboard):
+#   NODE_ENV=production
+#   JWT_SECRET=<run: openssl rand -base64 48>
+#   ALLOWED_ORIGINS=https://consulate67-lab.github.io
+#
+# Required Railway volume mount (Settings → Volumes → Mount Path: /data):
+#   This gives SQLite a persistent location. Without it, every deploy
+#   wipes the user database.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "./Dockerfile"
+
+[deploy]
+startCommand = "node server/index.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

@@ -1,30 +1,156 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import pg from 'pg';
 
+/**
+ * Thin adapter that exposes the SQLite-style API (run/get/all) on top of
+ * node-postgres so that route handlers in server/index.js don't need to
+ * know whether they're talking to SQLite or Postgres.
+ *
+ * Translation rules:
+ *   - `?` placeholders  →  `$1, $2, $3 ...`
+ *   - `INSERT` without `RETURNING`  →  appended `RETURNING id`
+ *   - Postgres unique-violation (SQLSTATE 23505)  →  thrown Error whose
+ *     .code === 'UNIQUE' so callers can detect duplicates portably
+ *
+ * Note: the adapter is opinionated about a small surface area. Anything
+ * Postgres-specific (transactions, JSONB, CTEs) is available via the
+ * underlying `pool` (callers can grab it from `.pool` if needed).
+ */
+class PostgresAdapter {
+    constructor(pool) {
+        this.pool = pool;
+    }
+
+    /** Convert `?` placeholders to `$1, $2, ...`. */
+    _convertPlaceholders(sql) {
+        let i = 0;
+        return sql.replace(/\?/g, () => `$${++i}`);
+    }
+
+    async run(sql, params = []) {
+        let finalSql = this._convertPlaceholders(sql);
+        // Auto-append RETURNING id on plain INSERT statements so the
+        // SQLite-shaped `result.lastID` keeps working in route handlers.
+        if (/^\s*INSERT\b/i.test(sql) && !/\bRETURNING\b/i.test(finalSql)) {
+            finalSql = finalSql.replace(/;\s*$/, '') + ' RETURNING id';
+        }
+        try {
+            const result = await this.pool.query(finalSql, params);
+            return {
+                lastID: result.rows[0]?.id ?? null,
+                rowCount: result.rowCount ?? 0,
+                changes: result.rowCount ?? 0,
+                rows: result.rows,
+            };
+        } catch (e) {
+            // 23505 = unique_violation
+            if (e.code === '23505') {
+                const wrapped = new Error(`UNIQUE constraint failed: ${e.detail ?? ''}`);
+                wrapped.code = 'UNIQUE';
+                throw wrapped;
+            }
+            throw e;
+        }
+    }
+
+    async get(sql, params = []) {
+        const finalSql = this._convertPlaceholders(sql);
+        const result = await this.pool.query(finalSql, params);
+        return result.rows[0] ?? null;
+    }
+
+    async all(sql, params = []) {
+        const finalSql = this._convertPlaceholders(sql);
+        const result = await this.pool.query(finalSql, params);
+        return result.rows;
+    }
+
+    async exec(sql) {
+        // Supports multi-statement strings the way db.exec() did in SQLite.
+        await this.pool.query(sql);
+    }
+
+    async close() {
+        await this.pool.end();
+    }
+}
+
+/**
+ * Add a column to the users table if it does not already exist.
+ * Idempotent — safe to call on every startup.
+ */
+const ensureColumn = async (client, column, definition) => {
+    const { rows } = await client.query(
+        `SELECT column_name
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name   = 'users'
+            AND column_name  = $1`,
+        [column]
+    );
+    if (rows.length > 0) return false;
+    console.log(`[db] Migration: adding column users.${column}`);
+    await client.query(`ALTER TABLE users ADD COLUMN ${column} ${definition}`);
+    return true;
+};
+
+/**
+ * Connect to Postgres using DATABASE_URL. Required env vars:
+ *   - DATABASE_URL (postgresql://user:pass@host:port/db)
+ *   - PGSSL (optional, "true" forces SSL — needed for Railway Postgres)
+ */
 export const initDb = async () => {
-  const db = await open({
-    filename: './server/database.sqlite',
-    driver: sqlite3.Database
-  });
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+        throw new Error(
+            'DATABASE_URL is not set. Local dev: export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/edesign'
+        );
+    }
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      full_name TEXT,
-      company_name TEXT,
-      phone_number TEXT,
-      role TEXT DEFAULT 'user',
-      credits INTEGER DEFAULT 0,
-      free_design_used INTEGER DEFAULT 0
-    )
-  `);
+    const useSsl =
+        process.env.PGSSL === 'true' ||
+        process.env.NODE_ENV === 'production' ||
+        /sslmode=require/i.test(databaseUrl);
 
-  // Migration: Add columns if they don't exist
-  try { await db.exec("ALTER TABLE users ADD COLUMN full_name TEXT"); } catch (e) { }
-  try { await db.exec("ALTER TABLE users ADD COLUMN company_name TEXT"); } catch (e) { }
-  try { await db.exec("ALTER TABLE users ADD COLUMN phone_number TEXT"); } catch (e) { }
+    const pool = new pg.Pool({
+        connectionString: databaseUrl,
+        ssl: useSsl ? { rejectUnauthorized: false } : false,
+        max: 10,
+        idleTimeoutMillis: 30_000,
+    });
 
-  return db;
+    // Fail fast on bad connection strings.
+    const probe = await pool.connect();
+    try {
+        // Schema bootstrap.
+        await probe.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id                SERIAL PRIMARY KEY,
+                username          TEXT UNIQUE NOT NULL,
+                password          TEXT NOT NULL,
+                full_name         TEXT,
+                company_name      TEXT,
+                phone_number      TEXT,
+                role              TEXT NOT NULL DEFAULT 'user',
+                credits           INTEGER NOT NULL DEFAULT 0,
+                free_design_used  INTEGER NOT NULL DEFAULT 0,
+                created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        `);
+
+        // Idempotent column migrations for tables that pre-date the
+        // full schema (created in earlier deploys with fewer columns).
+        await ensureColumn(probe, 'full_name', 'TEXT');
+        await ensureColumn(probe, 'company_name', 'TEXT');
+        await ensureColumn(probe, 'phone_number', 'TEXT');
+        await ensureColumn(probe, 'free_design_used', 'INTEGER NOT NULL DEFAULT 0');
+
+        // Useful indexes for the auth query path.
+        await probe.query(`CREATE INDEX IF NOT EXISTS idx_users_username ON users (username)`);
+    } finally {
+        probe.release();
+    }
+
+    console.log('[db] Connected to Postgres');
+    return new PostgresAdapter(pool);
 };
