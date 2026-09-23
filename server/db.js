@@ -14,9 +14,14 @@ const ensureColumn = async (db, column, definition) => {
   return true;
 };
 
+// Database location — Railway (or any container host) mounts a persistent
+// volume at /data. Locally we fall back to the in-repo SQLite file.
+const DB_PATH = process.env.DATABASE_PATH
+    || (process.env.NODE_ENV === 'production' ? '/data/database.sqlite' : './server/database.sqlite');
+
 export const initDb = async () => {
   const db = await open({
-    filename: './server/database.sqlite',
+    filename: DB_PATH,
     driver: sqlite3.Database
   });
 

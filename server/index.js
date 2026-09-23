@@ -57,7 +57,22 @@ const authenticateToken = (req, res, next) => {
 initDb().then(_db => {
     db = _db;
     app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        const host = process.env.HOST || '0.0.0.0';
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`Server running on http://localhost:${PORT}`);
+        } else {
+            console.log(`[server] Listening on ${host}:${PORT} (env=${NODE_ENV})`);
+        }
+    });
+});
+
+// Health endpoint used by Railway's healthcheck (and uptime monitors).
+app.get('/api/health', (_req, res) => {
+    res.json({
+        status: 'ok',
+        env: NODE_ENV,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
     });
 });
 
